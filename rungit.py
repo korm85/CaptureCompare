@@ -73,7 +73,11 @@ try:
         if "git push" in str(e):
             logging.error(f"Failed to push to remote: {e}")
             logging.info("Attempting to pull changes from remote before pushing...")
-            origin.pull(branch_name, '--allow-unrelated-histories')  # Added flag here for unrelated histories
+            
+            # Attempt to pull the remote changes with unrelated histories flag
+            origin.fetch()  # Fetch the remote repository changes
+            git_repo.git.pull('origin', branch_name, '--allow-unrelated-histories')
+            
             push_info = origin.push(branch_name)
             if push_info[0].flags & push_info[0].ERROR:
                 raise git.exc.GitCommandError("git push", push_info[0].summary)
