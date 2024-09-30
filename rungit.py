@@ -45,20 +45,21 @@ try:
 
     # Set up the remote repository
     remote_url = f"https://{personal_access_token}@github.com/{github_username}/{repo_name}.git"
-    try:
-        origin = git_repo.remote("origin")
+    
+    # Check if 'origin' remote exists
+    if 'origin' in [remote.name for remote in git_repo.remotes]:
+        origin = git_repo.remote('origin')
+        logging.info("Remote 'origin' already exists")
         if origin.url != remote_url:
             origin.set_url(remote_url)
             logging.info("Updated remote URL")
-        else:
-            logging.info("Remote 'origin' already exists with correct URL")
-    except git.exc.NoSuchPathError:
-        logging.info("Remote 'origin' not found. Creating new remote.")
-        origin = git_repo.create_remote("origin", url=remote_url)
+    else:
+        # Create 'origin' remote
+        origin = git_repo.create_remote('origin', remote_url)
         logging.info("Created new 'origin' remote")
 
     # Verify remote creation
-    if "origin" not in git_repo.remotes:
+    if 'origin' not in [remote.name for remote in git_repo.remotes]:
         raise git.exc.GitCommandError("create_remote", "Failed to create 'origin' remote")
 
     # Push changes to the remote repository
