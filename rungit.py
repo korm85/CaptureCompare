@@ -64,8 +64,22 @@ try:
 
     # Push changes to the remote repository
     branch_name = "master" if "master" in git_repo.heads else "main"
-    origin.push(branch_name)
-    logging.info(f"Pushed changes to {branch_name} branch on GitHub")
+    try:
+        push_info = origin.push(branch_name)
+        if push_info[0].flags & push_info[0].ERROR:
+            raise git.exc.GitCommandError("git push", push_info[0].summary)
+        logging.info(f"Pushed changes to {branch_name} branch on GitHub")
+    except git.exc.GitCommandError as e:
+        if "git push" in str(e):
+            logging.error(f"Failed to push to remote: {e}")
+            logging.info("Attempting to pull changes from remote before pushing...")
+            origin.pull(branch_name)
+            push_info = origin.push(branch_name)
+            if push_info[0].flags & push_info[0].ERROR:
+                raise git.exc.GitCommandError("git push", push_info[0].summary)
+            logging.info(f"Successfully pulled and pushed changes to {branch_name} branch on GitHub")
+        else:
+            raise
 
     logging.info(f"Repository '{repo_name}' has been successfully updated and pushed to GitHub.")
 
@@ -80,6 +94,9 @@ except git.exc.GitCommandError as e:
         git_repo.delete_remote("origin")
         git_repo.create_remote("origin", url=remote_url)
         logging.info("Remote 'origin' has been updated. Please run the script again.")
+    elif "git push" in str(e):
+        logging.error("Failed to push to remote even after attempting to pull. There might be conflicts.")
+        logging.error("Please resolve any conflicts manually, commit the changes, and run the script again.")
 except Exception as e:
     logging.error(f"An unexpected error occurred: {e}")
 
