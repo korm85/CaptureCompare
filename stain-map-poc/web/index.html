@@ -1,0 +1,789 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Stain Map Transfer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #ecf0ef;
+    --surface: #ffffff;
+    --surface-2: #f4f7f6;
+    --ink: #152022;
+    --muted: #5a6a6b;
+    --line: #d3dcdb;
+    --accent: #0a7868;
+    --accent-ink: #ffffff;
+    --accent-soft: #dcf0eb;
+    --warn: #945604;
+    --warn-soft: #fbead0;
+    --good: #1b774a;
+    --good-soft: #dcf1e4;
+    --sil-fill: #e4ebea;
+    --stage-a: #cfd9d7;
+    --stage-b: #b3c0be;
+    --stage-ink: #34403f;
+    --font-ui: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-data: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #0c1211;
+      --surface: #141c1b;
+      --surface-2: #1a2423;
+      --ink: #e2ebe9;
+      --muted: #8fa2a0;
+      --line: #283432;
+      --accent: #3cc6ad;
+      --accent-ink: #062320;
+      --accent-soft: #14322c;
+      --warn: #f0a540;
+      --warn-soft: #3a2a12;
+      --good: #55c78b;
+      --good-soft: #15301f;
+      --sil-fill: #1f2b2a;
+      --stage-a: #26312f;
+      --stage-b: #111918;
+      --stage-ink: #a9bab7;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0c1211;
+    --surface: #141c1b;
+    --surface-2: #1a2423;
+    --ink: #e2ebe9;
+    --muted: #8fa2a0;
+    --line: #283432;
+    --accent: #3cc6ad;
+    --accent-ink: #062320;
+    --accent-soft: #14322c;
+    --warn: #f0a540;
+    --warn-soft: #3a2a12;
+    --good: #55c78b;
+    --good-soft: #15301f;
+    --sil-fill: #1f2b2a;
+    --stage-a: #26312f;
+    --stage-b: #111918;
+    --stage-ink: #a9bab7;
+  }
+  html, body { height: 100%; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); font-size: 14px; line-height: 1.45; }
+  * { box-sizing: border-box; }
+  button, input, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .app { display: flex; flex-direction: column; gap: 14px; min-height: 100%; padding-inline: 16px; padding-block: 14px 24px; max-width: 1640px; margin: 0 auto; }
+
+  .top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px 24px; }
+  .top h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; text-wrap: balance; }
+  .top p { margin: 2px 0 0; color: var(--muted); max-width: 70ch; }
+  .status { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-data); font-size: 12px; color: var(--muted); padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); white-space: nowrap; }
+  .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
+  .status[data-state="busy"]::before { background: var(--warn); }
+  .status[data-state="error"]::before { background: #c0392b; }
+
+  .main { display: grid; grid-template-columns: 300px minmax(0, 1.3fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+  @media (max-width: 1240px) { .main { grid-template-columns: 300px minmax(0, 1fr); } .fit { grid-column: 2; } }
+  @media (max-width: 780px) { .main { grid-template-columns: minmax(0, 1fr); } .fit { grid-column: auto; } .stage-panel { order: -1; } .viewer { height: 62vh; } }
+
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); min-width: 0; }
+
+  /* sidebar */
+  .side { display: flex; flex-direction: column; }
+  .side section { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; }
+  .side section + section { border-top: 1px solid var(--line); }
+  .label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+  .file { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+  .file strong { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .meta { color: var(--muted); font-size: 12.5px; }
+  .meta b { color: var(--ink); font-weight: 500; }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .row > label { color: var(--muted); font-size: 12.5px; min-width: 88px; }
+  select, .btn { border: 1px solid var(--line); background: var(--surface-2); border-radius: 7px; padding: 6px 9px; }
+  select { min-width: 0; max-width: 100%; }
+  select.grow { flex: 1; }
+  .btn { cursor: pointer; font-size: 13px; line-height: 1.2; white-space: nowrap; }
+  .btn:hover { border-color: var(--accent); }
+  .btn.small { padding: 4px 8px; font-size: 12px; }
+  .check { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .check input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+  .note { font-size: 12.5px; padding: 7px 9px; border-radius: 7px; background: var(--surface-2); color: var(--muted); }
+  .note.warn { background: var(--warn-soft); color: var(--warn); }
+  .slider { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; }
+  .slider span { font-size: 12.5px; color: var(--muted); }
+  .slider output { font-family: var(--font-data); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .slider input { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); margin: 0; }
+
+  .layers { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+  .layers li label { display: grid; grid-template-columns: 16px 14px 1fr auto; align-items: center; gap: 8px; padding: 4px 2px; cursor: pointer; }
+  .layers input { accent-color: var(--accent); margin: 0; width: 16px; height: 16px; }
+  .swatch { width: 14px; height: 14px; border-radius: 3px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25); }
+  .count { font-family: var(--font-data); font-size: 11.5px; color: var(--muted); }
+  .layers li.off label { color: var(--muted); }
+
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+  .seg button { border: 0; background: var(--surface-2); padding: 5px 10px; cursor: pointer; font-size: 12.5px; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+  .seg button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  /* panels */
+  .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  .panel-head h2 { margin: 0; font-size: 14px; font-weight: 600; }
+  .panel-head .sub { color: var(--muted); font-size: 12.5px; }
+  .viewer { position: relative; height: min(70vh, 640px); min-height: 360px; background: radial-gradient(120% 90% at 50% 40%, var(--stage-a), var(--stage-b)); border-radius: 0 0 var(--radius) var(--radius); overflow: hidden; }
+  .viewer canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+  .hint { position: absolute; left: 12px; bottom: 10px; font-size: 12px; color: var(--stage-ink); pointer-events: none; }
+
+  .metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--line); border-bottom: 1px solid var(--line); }
+  .metric { background: var(--surface); padding: 10px 14px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .metric dt { font-size: 12px; color: var(--muted); }
+  .metric dd { margin: 0; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .metric .val { font-family: var(--font-data); font-size: 17px; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .metric .unit { font-size: 12px; color: var(--muted); }
+  .pill { font-size: 11px; font-weight: 600; letter-spacing: 0.02em; padding: 2px 7px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
+  .pill.good { background: var(--good-soft); color: var(--good); }
+  .pill.warn { background: var(--warn-soft); color: var(--warn); }
+  .fitbox { position: relative; aspect-ratio: 1 / 1; max-width: 100%; }
+  .fitbox canvas { display: block; width: 100%; height: 100%; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 10px 14px 14px; font-size: 12.5px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { display: inline-block; width: 18px; height: 0; border-top: 2px solid; }
+  .legend i.sil { border-color: var(--ink); }
+  .legend i.fit { border-color: var(--accent); border-top-style: dashed; }
+  .legend i.pair { border-color: var(--muted); border-top-width: 1px; }
+  .fit-toggles { display: flex; gap: 14px; flex-wrap: wrap; }
+
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="app">
+  <div class="top">
+    <div>
+      <h1>Stain Map Transfer</h1>
+      <p>Fits a photo's tooth outline onto the restoration's front-view silhouette, warps the annotated regions to match, and projects them onto the facial surface as a stain map.</p>
+    </div>
+    <div class="status" id="status" role="status" data-state="busy">Loading sample data…</div>
+  </div>
+
+  <div class="main">
+    <aside class="panel side" aria-label="Inputs and settings">
+      <section>
+        <p class="label">Restoration</p>
+        <div class="file"><strong id="meshName">—</strong><button class="btn small" id="loadMeshBtn" type="button">Load STL…</button></div>
+        <div class="meta" id="meshMeta"></div>
+        <div class="row"><label for="restTooth">Tooth (FDI)</label><select id="restTooth"></select></div>
+        <input type="file" id="meshFile" accept=".stl" hidden>
+      </section>
+
+      <section>
+        <p class="label">Photo annotation</p>
+        <div class="file"><strong id="cocoName">—</strong><button class="btn small" id="loadCocoBtn" type="button">Load COCO JSON…</button></div>
+        <div class="row"><label for="photoSel" class="sr-only">Photo</label><select id="photoSel" class="grow"></select></div>
+        <div class="meta" id="photoMeta"></div>
+        <div class="row"><label for="photoTooth">Photo tooth</label><select id="photoTooth"></select></div>
+        <label class="check"><input type="checkbox" id="mirror"><span id="mirrorLabel">Mirror photo</span></label>
+        <div class="note" id="photoNote" hidden></div>
+        <div class="row"><button class="btn small" id="loadImgBtn" type="button">Add photo image…</button><span class="meta" id="imgMeta">Optional: shows the real photo on the restoration</span></div>
+        <input type="file" id="cocoFile" accept=".json,application/json" hidden>
+        <input type="file" id="imgFile" accept="image/*" hidden>
+      </section>
+
+      <section>
+        <p class="label">Front view</p>
+        <div class="meta">Auto: largest outline, seen from the bulging (facial) side, long axis on the symmetry line, incisal edge down.</div>
+        <div class="slider"><span id="pitchLbl">Tilt incisal ↔ cervical</span><output id="pitchOut" for="pitch">0°</output><input type="range" id="pitch" min="-20" max="20" step="1" value="0" aria-labelledby="pitchLbl"></div>
+        <div class="slider"><span id="yawLbl">Tilt mesial ↔ distal</span><output id="yawOut" for="yaw">0°</output><input type="range" id="yaw" min="-20" max="20" step="1" value="0" aria-labelledby="yawLbl"></div>
+        <div class="row"><button class="btn small" id="rollBtn" type="button">Rotate 90°</button><button class="btn small" id="resetViewBtn" type="button">Reset to auto</button></div>
+      </section>
+
+      <section>
+        <p class="label">Stain layers</p>
+        <div class="row"><span class="meta">Show</span>
+          <div class="seg" role="group" aria-label="Texture">
+            <button type="button" id="modeLayers" aria-pressed="true">Layers</button>
+            <button type="button" id="modePhoto" aria-pressed="false" disabled>Photo</button>
+          </div>
+        </div>
+        <ul class="layers" id="layers"></ul>
+        <div class="slider"><span id="opLbl">Layer opacity</span><output id="opOut" for="opacity">85%</output><input type="range" id="opacity" min="0" max="100" step="5" value="85" aria-labelledby="opLbl"></div>
+      </section>
+    </aside>
+
+    <section class="panel stage-panel" aria-label="Stain map on restoration">
+      <div class="panel-head">
+        <div><h2>Stain map on restoration</h2><div class="sub" id="viewerSub">Facial surface only; hidden and inner surfaces stay unstained.</div></div>
+        <div class="seg" role="group" aria-label="Camera">
+          <button type="button" data-cam="front" aria-pressed="true">Front</button>
+          <button type="button" data-cam="mesial" aria-pressed="false">Mesial</button>
+          <button type="button" data-cam="distal" aria-pressed="false">Distal</button>
+          <button type="button" data-cam="incisal" aria-pressed="false">Incisal</button>
+        </div>
+      </div>
+      <div class="viewer" id="viewer"><div class="hint">Drag to rotate · scroll to zoom</div></div>
+    </section>
+
+    <section class="panel fit" aria-label="Outline fit">
+      <div class="panel-head">
+        <div><h2>Outline fit · front view</h2><div class="sub">Millimetres on the restoration; grid 1 mm.</div></div>
+        <div class="fit-toggles">
+          <label class="check"><input type="checkbox" id="showRegions" checked><span>Regions</span></label>
+          <label class="check"><input type="checkbox" id="showPairs" checked><span>Pairs</span></label>
+        </div>
+      </div>
+      <dl class="metrics" id="metrics">
+        <div class="metric"><dt>Overlap after scale · rotate · shift</dt><dd><span class="val" id="mIou">—</span><span class="pill" id="mIouPill"></span></dd></div>
+        <div class="metric"><dt>Photo scale</dt><dd><span class="val" id="mScale">—</span><span class="unit">µm per px</span></dd></div>
+        <div class="metric"><dt>Outline gap closed by warp</dt><dd><span class="val" id="mGap">—</span><span class="unit" id="mGapMax"></span></dd></div>
+        <div class="metric"><dt>Rotation · warp</dt><dd><span class="val" id="mRot">—</span><span class="pill" id="mWarp"></span></dd></div>
+      </dl>
+      <div class="fitbox"><canvas id="fitCanvas" aria-label="Restoration silhouette with the fitted photo outline and warped regions"></canvas></div>
+      <div class="legend">
+        <span><i class="sil"></i>Restoration silhouette</span>
+        <span><i class="fit"></i>Photo outline, best fit</span>
+        <span><i class="pair"></i>Warp pairs</span>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script type="importmap">
+  { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import * as core from './core.js';
+
+// ------------------------------------------------------------------ class styling
+const CLASSES = [   // drawing order: zones first, characterisations on top
+  ['Body Zone', '#7cc576', true], ['Cervical zone', '#d65a50', true], ['Incisal Zone', '#ea9ccf', true],
+  ['Translucent area', '#4ba7d6', true], ['Halo', '#9366cf', true], ['Mamelon', '#f19a3e', true],
+  ['White stain', '#fbfbf6', true], ['Stain', '#b9a22b', true], ['Crack', '#1d2c78', true],
+  ['Caries', '#7a4a2a', false], ['Filling', '#9aa3a8', false], ['Artificial tooth', '#6d7478', false],
+  ['Extraneous matter', '#555b5e', false], ['Reflection', '#ffffff', false],
+];
+const CLASS_COLOR = Object.fromEntries(CLASSES.map(([n, c]) => [n, c]));
+const ORDER = CLASSES.map(([n]) => n);
+const FDI = [13, 12, 11, 21, 22, 23, 43, 42, 41, 31, 32, 33];
+
+// ------------------------------------------------------------------ state
+const state = {
+  mesh: null, meshName: '', restTooth: 21,
+  photos: [], cocoName: '', photo: null, photoTooth: null, mirror: false,
+  autoFrame: null, pitch: 0, yaw: 0, roll: 0,
+  layerOn: new Map(CLASSES.map(([n, , on]) => [n, on])), opacity: 0.85, mode: 'layers',
+  image: null, result: null, crop: null, cam: 'front',
+};
+const $ = (id) => document.getElementById(id);
+const status = (text, s = 'ok') => { $('status').textContent = text; $('status').dataset.state = s; };
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+// ------------------------------------------------------------------ three.js scene
+const viewerEl = $('viewer');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0x000000, 0);
+viewerEl.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(28, 1, 1, 400);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.addEventListener('change', () => requestRender());
+
+const depthScene = new THREE.Scene();
+const DEPTH_RES = 1024;
+const depthRT = new THREE.WebGLRenderTarget(DEPTH_RES, DEPTH_RES);
+depthRT.depthTexture = new THREE.DepthTexture(DEPTH_RES, DEPTH_RES);
+depthRT.depthTexture.type = THREE.UnsignedIntType;
+const frontCam = new THREE.OrthographicCamera(-6, 6, 6, -6, 50, 150);
+frontCam.position.set(0, 0, 100); frontCam.up.set(0, 1, 0); frontCam.lookAt(0, 0, 0);
+
+const stainCanvas = document.createElement('canvas');
+const stainTex = new THREE.CanvasTexture(stainCanvas);
+stainTex.anisotropy = 4;
+
+const material = new THREE.ShaderMaterial({
+  uniforms: {
+    stainTex: { value: stainTex }, frontDepth: { value: depthRT.depthTexture },
+    frontViewProj: { value: new THREE.Matrix4() }, depthRange: { value: 100 },
+    texel: { value: new THREE.Vector2(1 / DEPTH_RES, 1 / DEPTH_RES) },
+    opacity: { value: 0.85 }, baseColor: { value: new THREE.Vector3(0xef / 255, 0xe7 / 255, 0xd6 / 255) },   // raw sRGB, shader works in display space
+  },
+  vertexShader: /* glsl */`
+    attribute vec2 photoUV;
+    varying vec2 vUV; varying vec3 vWorld; varying vec3 vNormalW; varying vec3 vNormalV;
+    void main() {
+      vUV = photoUV;
+      vec4 w = modelMatrix * vec4(position, 1.0);
+      vWorld = w.xyz;
+      vNormalW = normalize(mat3(modelMatrix) * normal);
+      vNormalV = normalize(normalMatrix * normal);
+      gl_Position = projectionMatrix * viewMatrix * w;
+    }`,
+  fragmentShader: /* glsl */`
+    uniform sampler2D stainTex; uniform sampler2D frontDepth; uniform mat4 frontViewProj;
+    uniform float depthRange; uniform vec2 texel; uniform float opacity; uniform vec3 baseColor;
+    varying vec2 vUV; varying vec3 vWorld; varying vec3 vNormalW; varying vec3 vNormalV;
+    void main() {
+      vec3 n = normalize(vNormalV);
+      if (!gl_FrontFacing) n = -n;
+      vec3 key = normalize(vec3(-0.35, 0.55, 0.75));
+      float light = 0.30 + 0.50 * max(n.z, 0.0) + 0.28 * max(dot(n, key), 0.0);
+      float spec = pow(max(dot(n, normalize(key + vec3(0.0, 0.0, 1.0))), 0.0), 48.0) * 0.16;
+      // stainable = facing the front view and not hidden behind other surface in that view
+      float cosT = dot(normalize(vNormalW), vec3(0.0, 0.0, 1.0));
+      float facing = smoothstep(0.02, 0.25, cosT);
+      vec4 fp = frontViewProj * vec4(vWorld, 1.0);
+      vec3 ndc = fp.xyz / fp.w;
+      vec2 suv = ndc.xy * 0.5 + 0.5;
+      float fd = ndc.z * 0.5 + 0.5;
+      float c = clamp(cosT, 0.08, 1.0);
+      float bias = (0.03 + 0.03 * sqrt(1.0 - c * c) / c) / depthRange;
+      float vis = 0.0;
+      for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++)
+        vis += fd <= texture2D(frontDepth, suv + vec2(float(i), float(j)) * texel).r + bias ? 1.0 : 0.0;
+      vis /= 9.0;
+      vec4 st = texture2D(stainTex, vUV);
+      float a = st.a * opacity * facing * vis;
+      vec3 col = mix(baseColor, st.rgb, a);
+      gl_FragColor = vec4(col * light + spec, 1.0);
+    }`,
+  side: THREE.DoubleSide,
+});
+
+let meshObj = null, depthObj = null;
+function buildMeshObject() {
+  if (meshObj) { scene.remove(meshObj); depthScene.remove(depthObj); meshObj.geometry.dispose(); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(state.mesh.positions), 3));
+  g.setIndex(new THREE.BufferAttribute(state.mesh.indices, 1));
+  g.computeVertexNormals();
+  g.setAttribute('photoUV', new THREE.BufferAttribute(new Float32Array(state.mesh.positions.length / 3 * 2), 2));
+  meshObj = new THREE.Mesh(g, material);
+  meshObj.visible = false;   // shown once the first fit has produced its stain map
+  depthObj = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, colorWrite: false }));
+  for (const o of [meshObj, depthObj]) o.matrixAutoUpdate = false;
+  scene.add(meshObj); depthScene.add(depthObj);
+}
+
+/** Put the restoration in world space so the front view looks down -Z with up = +Y. */
+function applyFrame(frame) {
+  const { right: r, up: u, view: v } = frame;
+  const m = new THREE.Matrix4().set(r[0], r[1], r[2], 0, u[0], u[1], u[2], 0, v[0], v[1], v[2], 0, 0, 0, 0, 1);
+  for (const o of [meshObj, depthObj]) { o.matrix.copy(m); o.matrixWorldNeedsUpdate = true; }
+}
+
+function renderDepth(bounds) {
+  const [x0, y0, x1, y1] = bounds, pad = 0.4;
+  Object.assign(frontCam, { left: x0 - pad, right: x1 + pad, bottom: y0 - pad, top: y1 + pad });
+  frontCam.updateProjectionMatrix(); frontCam.updateMatrixWorld();
+  material.uniforms.frontViewProj.value.multiplyMatrices(frontCam.projectionMatrix, frontCam.matrixWorldInverse);
+  material.uniforms.depthRange.value = frontCam.far - frontCam.near;
+  renderer.setRenderTarget(depthRT); renderer.clear(); renderer.render(depthScene, frontCam); renderer.setRenderTarget(null);
+}
+
+function setCamera(which) {
+  state.cam = which;
+  document.querySelectorAll('[data-cam]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.cam === which)));
+  // quadrants 1 and 4 (patient's right) have their mesial side toward the viewer's right in a front view
+  const q = core.toothQuadrant(state.restTooth), mesialX = q === 1 || q === 4 ? 1 : -1;
+  const radius = state.mesh ? 0.5 * Math.hypot(...state.mesh.extents) : 8;
+  const D = (1.35 * radius) / Math.sin((camera.fov / 2) * (Math.PI / 180)), deg = Math.PI / 180;
+  const dir = {
+    front: [0, 0, 1],
+    mesial: [mesialX * Math.sin(70 * deg), 0, Math.cos(70 * deg)],
+    distal: [-mesialX * Math.sin(70 * deg), 0, Math.cos(70 * deg)],
+    incisal: [0, -Math.sin(60 * deg), Math.cos(60 * deg)],
+  }[which];
+  camera.position.set(dir[0] * D, dir[1] * D, dir[2] * D);
+  camera.up.set(0, 1, 0); controls.target.set(0, 0, 0); camera.lookAt(0, 0, 0);
+  controls.update(); requestRender();
+}
+document.querySelectorAll('[data-cam]').forEach((b) => b.addEventListener('click', () => setCamera(b.dataset.cam)));
+
+let renderQueued = false;
+function requestRender() {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => {
+    renderQueued = false;
+    if (controls.update()) requestRender();
+    renderer.render(scene, camera);
+  });
+}
+new ResizeObserver(() => {
+  const w = viewerEl.clientWidth, h = viewerEl.clientHeight;
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); requestRender();
+}).observe(viewerEl);
+
+// ------------------------------------------------------------------ stain texture (photo space)
+function computeCrop(photo) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const [x, y] of photo.outline) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  const m = 0.06 * Math.max(x1 - x0, y1 - y0);
+  return { x0: x0 - m, y0: y0 - m, w: x1 - x0 + 2 * m, h: y1 - y0 + 2 * m };
+}
+const tracePath = (ctx, P) => { ctx.beginPath(); P.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); };
+let stainPixels = null;
+
+function drawStainCanvas() {
+  const photo = state.shownPhoto, crop = state.crop;
+  const long = 2048, sc = long / Math.max(crop.w, crop.h);
+  const cw = Math.round(crop.w * sc), ch = Math.round(crop.h * sc);
+  if (cw !== stainCanvas.width || ch !== stainCanvas.height) {
+    stainCanvas.width = cw; stainCanvas.height = ch;
+    stainTex.dispose();   // GPU storage is sized on first upload; release it so the new size is allocated
+  }
+  const ctx = stainCanvas.getContext('2d', { willReadFrequently: true });
+  ctx.clearRect(0, 0, stainCanvas.width, stainCanvas.height);
+  ctx.save();
+  ctx.setTransform(sc, 0, 0, sc, -crop.x0 * sc, -crop.y0 * sc);
+  tracePath(ctx, photo.outline); ctx.clip();
+  const line = 0.0022 * Math.max(crop.w, crop.h);
+  if (state.mode === 'photo' && state.image) {
+    ctx.save();
+    if (photo.mirrored) { ctx.translate(photo.width, 0); ctx.scale(-1, 1); }
+    ctx.drawImage(state.image, 0, 0, photo.width, photo.height);
+    ctx.restore();
+    ctx.lineWidth = line;
+    for (const cls of ORDER) {
+      if (!state.layerOn.get(cls)) continue;
+      ctx.strokeStyle = CLASS_COLOR[cls] || '#888';
+      for (const r of photo.regions) if (r.cls === cls) { tracePath(ctx, r.polygon); ctx.stroke(); }
+    }
+  } else {
+    for (const cls of ORDER) {
+      if (!state.layerOn.get(cls)) continue;
+      ctx.fillStyle = CLASS_COLOR[cls] || '#888';
+      ctx.strokeStyle = 'rgba(25, 30, 32, 0.32)'; ctx.lineWidth = line * 0.7;
+      for (const r of photo.regions) if (r.cls === cls) { tracePath(ctx, r.polygon); ctx.fill(); ctx.stroke(); }
+    }
+  }
+  ctx.restore();
+  stainTex.needsUpdate = true;
+  stainPixels = ctx.getImageData(0, 0, stainCanvas.width, stainCanvas.height);
+}
+
+function updateUVs() {
+  const { photoPx } = state.result, crop = state.crop;
+  const attr = meshObj.geometry.getAttribute('photoUV');
+  for (let i = 0; i < photoPx.length / 2; i++) {
+    attr.array[i * 2] = (photoPx[i * 2] - crop.x0) / crop.w;
+    attr.array[i * 2 + 1] = 1 - (photoPx[i * 2 + 1] - crop.y0) / crop.h;
+  }
+  attr.needsUpdate = true;
+}
+
+// ------------------------------------------------------------------ 2D fit panel
+const fitCanvas = $('fitCanvas');
+function drawFit() {
+  const r = state.result;
+  const dpr = Math.min(window.devicePixelRatio, 2), W = fitCanvas.clientWidth, H = fitCanvas.clientHeight;
+  if (!W || !H) return;
+  fitCanvas.width = Math.round(W * dpr); fitCanvas.height = Math.round(H * dpr);
+  const ctx = fitCanvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  if (!r) return;
+  const all = [...r.silhouette, ...r.aligned];
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const [x, y] of all) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  const pad = 26, s = Math.min((W - 2 * pad) / (x1 - x0), (H - 2 * pad - 18) / (y1 - y0));
+  const cx = W / 2, cy = (H - 18) / 2, mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+  const X = (x) => cx + (x - mx) * s, Y = (y) => cy - (y - my) * s;
+  const ink = css('--ink'), muted = css('--muted'), line = css('--line'), accent = css('--accent');
+
+  // 1 mm grid
+  ctx.lineWidth = 1; ctx.strokeStyle = line;
+  ctx.beginPath();
+  for (let g = Math.ceil(mx - W / 2 / s); g <= mx + W / 2 / s; g++) { ctx.moveTo(Math.round(X(g)) + 0.5, 0); ctx.lineTo(Math.round(X(g)) + 0.5, H); }
+  for (let g = Math.ceil(my - H / 2 / s); g <= my + H / 2 / s; g++) { ctx.moveTo(0, Math.round(Y(g)) + 0.5); ctx.lineTo(W, Math.round(Y(g)) + 0.5); }
+  ctx.stroke();
+
+  // silhouette fill
+  const silPath = new Path2D();
+  r.silhouette.forEach(([x, y], i) => (i ? silPath.lineTo(X(x), Y(y)) : silPath.moveTo(X(x), Y(y)))); silPath.closePath();
+  ctx.fillStyle = css('--sil-fill'); ctx.fill(silPath);
+
+  // regions warped into the silhouette: sample the stain texture through the warp for each pixel
+  if ($('showRegions').checked && stainPixels) {
+    const step = 2, ow = Math.ceil(W / step), oh = Math.ceil(H / step);
+    const off = document.createElement('canvas'); off.width = ow; off.height = oh;
+    const octx = off.getContext('2d');
+    octx.fillStyle = '#000'; octx.save(); octx.scale(1 / step, 1 / step); octx.fill(silPath); octx.restore();
+    const inside = octx.getImageData(0, 0, ow, oh).data, img = octx.createImageData(ow, oh);
+    const crop = state.crop, sw = stainPixels.width, sh = stainPixels.height, sp = stainPixels.data;
+    for (let j = 0; j < oh; j++)
+      for (let i = 0; i < ow; i++) {
+        const k = (j * ow + i) * 4;
+        if (inside[k + 3] < 128) continue;
+        const [px, py] = r.tps.map(mx + ((i + 0.5) * step - cx) / s, my - ((j + 0.5) * step - cy) / s);
+        const u = Math.floor(((px - crop.x0) / crop.w) * sw), v = Math.floor(((py - crop.y0) / crop.h) * sh);
+        if (u < 0 || v < 0 || u >= sw || v >= sh) continue;
+        const q = (v * sw + u) * 4;
+        img.data[k] = sp[q]; img.data[k + 1] = sp[q + 1]; img.data[k + 2] = sp[q + 2]; img.data[k + 3] = sp[q + 3] * 0.8;
+      }
+    octx.putImageData(img, 0, 0);
+    ctx.imageSmoothingEnabled = true; ctx.drawImage(off, 0, 0, ow * step, oh * step);
+  }
+
+  ctx.strokeStyle = ink; ctx.lineWidth = 1.6; ctx.stroke(silPath);
+
+  if ($('showPairs').checked) {
+    ctx.strokeStyle = muted; ctx.lineWidth = 1; ctx.beginPath();
+    for (let i = 0; i < r.pairs.A.length; i += 4) {
+      const a = r.pairs.A[i], b = r.pairs.B[i];
+      ctx.moveTo(X(a[0]), Y(a[1])); ctx.lineTo(X(b[0]), Y(b[1]));
+    }
+    ctx.stroke();
+  }
+
+  ctx.strokeStyle = accent; ctx.lineWidth = 1.6; ctx.setLineDash([6, 4]);
+  ctx.beginPath(); r.aligned.forEach(([x, y], i) => (i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y)))); ctx.closePath(); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // scale bar
+  const bx = 14, by = H - 12;
+  ctx.strokeStyle = ink; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + 2 * s, by); ctx.moveTo(bx, by - 4); ctx.lineTo(bx, by + 1); ctx.moveTo(bx + 2 * s, by - 4); ctx.lineTo(bx + 2 * s, by + 1); ctx.stroke();
+  ctx.fillStyle = ink; ctx.font = `12px ${css('--font-data')}`; ctx.fillText('2 mm', bx + 2 * s + 8, by + 4);
+}
+new ResizeObserver(() => drawFit()).observe(fitCanvas);
+$('showRegions').addEventListener('change', drawFit);
+$('showPairs').addEventListener('change', drawFit);
+
+// ------------------------------------------------------------------ metrics and side panel
+function setPill(el, text, kind) { el.textContent = text; el.className = `pill ${kind || ''}`; }
+function renderMetrics() {
+  const r = state.result;
+  $('mIou').textContent = r.fit.iou.toFixed(3);
+  setPill($('mIouPill'), r.fit.iou >= 0.9 ? 'close shapes' : r.fit.iou >= 0.8 ? 'reshaped' : 'very different', r.fit.iou >= 0.9 ? 'good' : r.fit.iou >= 0.8 ? '' : 'warn');
+  $('mScale').textContent = (r.fit.scale * 1000).toFixed(2);
+  $('mGap').textContent = `${r.gap.mean.toFixed(2)} mm`;
+  $('mGapMax').textContent = `mean · ${r.gap.max.toFixed(2)} mm max`;
+  $('mRot').textContent = `${(r.fit.rotation * 180 / Math.PI).toFixed(1)}°`;
+  setPill($('mWarp'), r.folds ? 'folds' : r.lambda ? 'smoothed, no folds' : 'no folds', r.folds ? 'warn' : 'good');
+}
+
+function renderLayers() {
+  const counts = new Map();
+  for (const r of state.photo.regions) counts.set(r.cls, (counts.get(r.cls) || 0) + 1);
+  const ul = $('layers'); ul.textContent = '';
+  for (const cls of ORDER) {
+    if (!counts.has(cls)) continue;
+    const id = `layer-${cls.toLowerCase().replace(/[^a-z]+/g, '-')}`;
+    const li = document.createElement('li'); li.className = state.layerOn.get(cls) ? '' : 'off';
+    li.innerHTML = `<label for="${id}"><input type="checkbox" id="${id}"><span class="swatch"></span><span></span><span class="count"></span></label>`;
+    const input = li.querySelector('input'); input.checked = state.layerOn.get(cls);
+    li.querySelector('.swatch').style.background = CLASS_COLOR[cls] || '#888';
+    li.querySelector('span:nth-of-type(2)').textContent = cls;
+    li.querySelector('.count').textContent = `×${counts.get(cls)}`;
+    input.addEventListener('change', () => { state.layerOn.set(cls, input.checked); li.className = input.checked ? '' : 'off'; refreshTexture(); });
+    ul.append(li);
+  }
+}
+
+function fillToothSelect(sel, value, allowUnknown) {
+  sel.textContent = '';
+  if (allowUnknown) sel.append(new Option('unknown', ''));
+  for (const t of FDI) sel.append(new Option(String(t), String(t)));
+  sel.value = value ? String(value) : '';
+}
+
+function updatePhotoSide() {
+  const p = state.photo;
+  const src = p.toothSource === 'annotation' ? 'from annotation' : p.toothSource ? `from ${p.toothSource.replace('twin photo ', 'twin ')}` : 'not in annotation';
+  $('photoMeta').innerHTML = `<b>${p.width} × ${p.height}</b> px · ${p.regions.length} regions · tooth ${p.tooth ?? '?'} <span>(${src})</span>`;
+  fillToothSelect($('photoTooth'), state.photoTooth, true);
+  $('mirror').checked = state.mirror;
+  $('mirrorLabel').textContent = state.photoTooth && state.restTooth
+    ? `Mirror photo (${state.photoTooth} → ${state.restTooth})` : 'Mirror photo';
+  const notes = [];
+  if (p.outlineSource === 'regions') notes.push('The tooth annotation here is a small marker, so the outline was rebuilt from the annotated regions.');
+  if (state.photoTooth && state.restTooth && core.toothType(state.photoTooth) !== core.toothType(state.restTooth))
+    notes.push(`Tooth ${state.photoTooth} is a different tooth type than restoration ${state.restTooth}; expect heavy reshaping.`);
+  $('photoNote').hidden = !notes.length;
+  $('photoNote').className = `note ${notes.some((n) => n.includes('different')) ? 'warn' : ''}`;
+  $('photoNote').textContent = notes.join(' ');
+}
+
+// ------------------------------------------------------------------ pipeline
+function currentFrame() { return core.adjustFrame(state.autoFrame, { pitch: state.pitch, yaw: state.yaw, roll: state.roll }); }
+
+let runToken = 0;
+function run() {
+  if (!state.mesh || !state.photo) return;
+  const token = ++runToken;
+  status('Fitting outline…', 'busy');
+  setTimeout(() => {
+    if (token !== runToken) return;
+    try {
+      const t0 = performance.now();
+      const frame = currentFrame();
+      const shown = state.mirror ? core.mirrorPhoto(state.photo) : { ...state.photo, mirrored: false };
+      state.shownPhoto = shown;
+      state.crop = computeCrop(shown);
+      state.result = core.transfer(state.mesh, frame, shown);
+      applyFrame(frame);
+      const sil = state.result.silhouette;
+      renderDepth([Math.min(...sil.map((p) => p[0])), Math.min(...sil.map((p) => p[1])), Math.max(...sil.map((p) => p[0])), Math.max(...sil.map((p) => p[1]))]);
+      drawStainCanvas(); updateUVs(); renderMetrics(); drawFit();
+      meshObj.visible = true; requestRender();
+      status(`Fitted in ${Math.round(performance.now() - t0)} ms`);
+    } catch (err) {
+      console.error(err);
+      status(`Fit failed: ${err.message}`, 'error');
+    }
+  }, 20);
+}
+function refreshTexture() { if (!state.result) return; drawStainCanvas(); drawFit(); requestRender(); }
+
+// ------------------------------------------------------------------ inputs
+function setMesh(buffer, name) {
+  state.mesh = core.parseSTL(buffer);
+  state.meshName = name;
+  state.autoFrame = core.autoFrontView(state.mesh);
+  const m = name.match(/(?:^|\D)([1-4][1-8])(?:\D|$)/);
+  if (m) state.restTooth = +m[1];
+  $('meshName').textContent = name;
+  const e = state.mesh.extents;
+  $('meshMeta').textContent = `${(state.mesh.indices.length / 3).toLocaleString()} triangles · ${e.map((v) => v.toFixed(1)).join(' × ')} mm`;
+  fillToothSelect($('restTooth'), state.restTooth, false);
+  buildMeshObject();
+  state.pitch = state.yaw = state.roll = 0; syncSliders();
+}
+
+function setCoco(json, name) {
+  const { photos } = core.parseCoco(json);
+  if (!photos.length) throw new Error('No photos with a tooth outline and regions found in this file.');
+  state.photos = photos; state.cocoName = name;
+  $('cocoName').textContent = name;
+  const sel = $('photoSel'); sel.textContent = '';
+  for (const p of photos) sel.append(new Option(`${p.file.split('/').pop()} · #${p.tooth ?? '?'}`, String(p.id)));
+  const preferred = photos.find((p) => p.file.endsWith('crop_case_007.jpg')) || photos[0];
+  sel.value = String(preferred.id);
+  selectPhoto(preferred.id, false);
+}
+
+function selectPhoto(id, go = true) {
+  state.photo = state.photos.find((p) => p.id === +id);
+  state.photoTooth = state.photo.tooth;
+  state.mirror = !!core.isContralateral(state.photoTooth, state.restTooth);
+  state.image = null; state.mode = 'layers'; syncMode();
+  $('imgMeta').textContent = 'Optional: shows the real photo on the restoration';
+  updatePhotoSide(); renderLayers();
+  if (go) run();
+}
+
+function syncSliders() {
+  $('pitch').value = state.pitch; $('pitchOut').textContent = `${state.pitch}°`;
+  $('yaw').value = state.yaw; $('yawOut').textContent = `${state.yaw}°`;
+}
+function syncMode() {
+  $('modeLayers').setAttribute('aria-pressed', String(state.mode === 'layers'));
+  $('modePhoto').setAttribute('aria-pressed', String(state.mode === 'photo'));
+  $('modePhoto').disabled = !state.image;
+}
+
+$('photoSel').addEventListener('change', (e) => selectPhoto(e.target.value));
+$('photoTooth').addEventListener('change', (e) => {
+  state.photoTooth = e.target.value ? +e.target.value : null;
+  state.mirror = !!core.isContralateral(state.photoTooth, state.restTooth);
+  updatePhotoSide(); run();
+});
+$('restTooth').addEventListener('change', (e) => {
+  state.restTooth = +e.target.value;
+  state.mirror = !!core.isContralateral(state.photoTooth, state.restTooth);
+  updatePhotoSide(); run(); setCamera(state.cam);
+});
+$('mirror').addEventListener('change', (e) => { state.mirror = e.target.checked; run(); });
+for (const k of ['pitch', 'yaw']) {
+  $(k).addEventListener('input', (e) => { $(`${k}Out`).textContent = `${e.target.value}°`; });
+  $(k).addEventListener('change', (e) => { state[k] = +e.target.value; run(); });
+}
+$('rollBtn').addEventListener('click', () => { state.roll = (state.roll + 1) % 4; run(); });
+$('resetViewBtn').addEventListener('click', () => { state.pitch = state.yaw = state.roll = 0; syncSliders(); run(); });
+$('opacity').addEventListener('input', (e) => {
+  state.opacity = e.target.value / 100; $('opOut').textContent = `${e.target.value}%`;
+  material.uniforms.opacity.value = state.opacity; requestRender();
+});
+$('modeLayers').addEventListener('click', () => { state.mode = 'layers'; syncMode(); refreshTexture(); });
+$('modePhoto').addEventListener('click', () => { if (!state.image) return; state.mode = 'photo'; syncMode(); refreshTexture(); });
+
+const readFile = (file, how) => new Promise((ok, fail) => {
+  const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = () => fail(fr.error);
+  how === 'text' ? fr.readAsText(file) : how === 'url' ? fr.readAsDataURL(file) : fr.readAsArrayBuffer(file);
+});
+$('loadMeshBtn').addEventListener('click', () => $('meshFile').click());
+$('loadCocoBtn').addEventListener('click', () => $('cocoFile').click());
+$('loadImgBtn').addEventListener('click', () => $('imgFile').click());
+$('meshFile').addEventListener('change', async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    setMesh(await readFile(f), f.name);
+    state.mirror = !!core.isContralateral(state.photoTooth, state.restTooth);
+    if (state.photo) updatePhotoSide();
+    run(); setCamera('front');
+  } catch (err) { status(`Could not read ${f.name}: ${err.message}`, 'error'); }
+  e.target.value = '';
+});
+$('cocoFile').addEventListener('change', async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  try { setCoco(JSON.parse(await readFile(f, 'text')), f.name); run(); }
+  catch (err) { status(`Could not read ${f.name}: ${err.message}`, 'error'); }
+  e.target.value = '';
+});
+$('imgFile').addEventListener('change', async (e) => {
+  const f = e.target.files[0]; if (!f || !state.photo) return;
+  const img = new Image();
+  img.onload = () => {
+    state.image = img; state.mode = 'photo'; syncMode();
+    const p = state.photo, match = img.naturalWidth === p.width && img.naturalHeight === p.height;
+    $('imgMeta').textContent = match ? `${f.name} · matches the annotation size`
+      : `${f.name} is ${img.naturalWidth} × ${img.naturalHeight}; the annotation expects ${p.width} × ${p.height}, so it is stretched to fit`;
+    refreshTexture();
+  };
+  img.onerror = () => status(`Could not open ${f.name} as an image`, 'error');
+  img.src = await readFile(f, 'url');
+  e.target.value = '';
+});
+
+// redraw the 2D panel when the theme changes
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawFit);
+new MutationObserver(drawFit).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+// ------------------------------------------------------------------ start with the sample case
+(async () => {
+  try {
+    const [stl, coco] = await Promise.all([
+      fetch('data/21.stl.json').then((r) => { if (!r.ok) throw new Error(`restoration ${r.status}`); return r.json(); })
+        .then((j) => Uint8Array.from(atob(j.base64), (c) => c.charCodeAt(0)).buffer),
+      fetch('data/annotations.json').then((r) => { if (!r.ok) throw new Error(`annotations ${r.status}`); return r.json(); }),
+    ]);
+    setMesh(stl, '21.stl (sample veneer)');
+    setCoco(coco, 'instances_default.json (sample)');
+    setCamera('front');
+    run();
+  } catch (err) {
+    console.error(err);
+    status(`Sample data did not load (${err.message}). Load an STL and a COCO JSON to start.`, 'error');
+  }
+})();
+</script>
+
+</body>
+</html>
