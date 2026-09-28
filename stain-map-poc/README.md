@@ -14,6 +14,7 @@ Hosted demo of this exact code: https://claude.ai/artifact/PLTM93LLj1MJzByS8jiGS
 | `web/data/21.stl` | Sample restoration: exocad veneer for tooth 21 (22,490 triangles, closed). |
 | `web/data/21.stl.json` | Same STL as base64 in JSON (the hosted demo can't serve `.stl`; the page loads this one). |
 | `web/data/annotations.json` | Trimmed CVAT COCO export: 30 photos, 361 polygons, 15 classes. See "Data notes". |
+| `AGENT_PROMPT.md` | Ready-to-paste brief for the agent integrating this into the app. |
 | `tests/test_core.mjs` | Runs the full pipeline in Node on every photo and prints fit metrics. |
 | `prototype/*.py` | First Python prototype (numpy, scipy, trimesh, shapely, Pillow, matplotlib) used to validate the approach. |
 
