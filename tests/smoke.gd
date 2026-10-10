@@ -23,6 +23,7 @@ func _run() -> void:
 	await _test_reveal()
 	await _test_decorate()
 	await _test_touch_input()
+	await _test_main_background()
 	_test_art()
 	_test_no_blocking_controls()
 	print("FAILURES: %d" % _failures)
@@ -182,4 +183,20 @@ func _test_touch_input() -> void:
 	_touch(egg, 0, 0, Vector2(640, 340))
 	_check(egg.stage == 1, "touch tap on the egg cracks it")
 	egg.queue_free()
+
+
+func _test_main_background() -> void:
+	# Main's sky sprite is drawn behind the decorate screen, so it must be hidden there or it hides
+	# the chosen backdrop.
+	var main: Node2D = (load("res://scenes/main.tscn") as PackedScene).instantiate()
+	root.add_child(main)
+	await process_frame
+	var egg: Egg = main.egg
+	for i in 4:
+		egg.hit()
+	await create_timer(1.3).timeout
+	_check(not main.background.visible, "main sky is hidden while decorating")
+	main.decorate.new_egg_requested.emit()
+	_check(main.background.visible, "main sky returns for a new egg")
+	main.queue_free()
 

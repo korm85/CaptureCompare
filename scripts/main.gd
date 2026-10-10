@@ -11,6 +11,8 @@ var state := State.EGG
 var egg: Egg
 var decorate: Decorate
 
+@onready var background: Sprite2D = $Background
+
 
 func _ready() -> void:
 	egg = EGG_SCENE.instantiate() as Egg
@@ -21,6 +23,7 @@ func _ready() -> void:
 
 func _start_egg() -> void:
 	state = State.EGG
+	background.visible = true
 	egg.reset()
 	egg.set_active(true)
 	var audio := get_node_or_null("/root/Audio")
@@ -31,6 +34,8 @@ func _start_egg() -> void:
 func _on_egg_hatched() -> void:
 	state = State.REVEAL
 	egg.set_active(false)
+	# The decorate screen draws its own backdrop, which sits behind this sprite in the draw order.
+	background.visible = false
 	decorate = DECORATE_SCENE.instantiate() as Decorate
 	add_child(decorate)
 	decorate.ready_to_decorate.connect(_on_ready_to_decorate)
