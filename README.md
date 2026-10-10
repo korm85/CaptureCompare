@@ -36,7 +36,7 @@ then open `http://localhost:8000/` on a tablet or phone on the same network.
 
 ## Placeholder art and sound
 
-`tools/make_placeholders.py` draws the art and generates the sounds. Re-run it from the project root:
+`tools/make_placeholders.py` draws the art (shaded toys, clothing, die-cut stickers, eggs, backgrounds) and generates the sounds. Re-run it from the project root:
 
 ```bash
 pip install --break-system-packages pillow numpy
@@ -63,21 +63,27 @@ Content lives in `scripts/data.gd`.
 
 **Add a toy** (for example, a frog):
 
-1. Drop `assets/art/frog.png` (512x512, transparent background) in place.
+1. Draw `assets/art/frog.png` (512x512, transparent background, toy centred, ground shadow near the bottom).
 2. Add `"frog"` to `TOYS`.
-3. Optionally add `assets/sfx/toy_frog.wav` for its sound. Without it the toy is silent.
+3. Add its anchors to `TOY_ANCHORS`: `head` (top of the head), `face` (between the eyes), `neck` (where a collar sits) and `body` (centre of the body). Each is an offset in texture pixels from the centre of the image, for example `"head": Vector2(0, -150)`. Check them in the game: a hat should sit on the head, and glasses on the eyes.
+4. Optionally add `assets/sfx/toy_frog.wav` for its sound. Without it the toy is silent.
 
 **Add a clothing item** (for example, a cap that sits on the head):
 
-1. Drop `assets/art/cap_red.png` in place. Draw it centred on the canvas, with its attach point at the centre.
+1. Draw `assets/art/cap_red.png` in place. Draw it centred on the canvas, with its attach point at the centre.
 2. Add `"cap_red": "head"` to `CLOTHES`. The slot is `head`, `face`, `neck` or `body`.
 
 **Add a sticker**:
 
-1. Drop `assets/art/moon2.png` in place.
+1. Draw `assets/art/moon2.png` in place.
 2. Add `"moon2"` to `STICKERS`.
 
-Every toy needs the four anchors in `ANCHORS` (`head`, `face`, `neck`, `body`). They are offsets in texture pixels from the toy's centre, so one set works for every toy that is drawn to the same layout.
+**Add a background**:
+
+1. Draw `assets/art/bg_<name>.png` (1280x720, the full scene) and `assets/art/swatch_<name>.png` (512x512, the shelf thumbnail).
+2. Add `"<name>"` to `BACKGROUNDS`.
+
+The art generator (`tools/make_placeholders.py`) draws placeholder versions of all of these. Its toy, clothing and sticker functions are a good template for hand-made art.
 
 ## Project layout
 
@@ -100,5 +106,6 @@ Everything is touch first. Godot maps touch to mouse, so one mouse code path cov
 - **Egg:** tap to crack it. Four taps split it open.
 - **Decorate:** drag from the shelf to make a copy. Clothes snap to their spot on the toy when dropped nearby.
   Stickers go anywhere. Drag a sticker onto the shelf or the trash can to remove it.
+- **Toy:** tap it to make it hop and play its sound.
 - **Tabs:** clothes, stickers, backgrounds.
 - **New egg** (bottom right): starts a new round.

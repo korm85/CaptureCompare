@@ -26,17 +26,19 @@ var _pointer := Pointer.new()
 @onready var half_left: Sprite2D = $HalfLeft
 @onready var half_right: Sprite2D = $HalfRight
 @onready var confetti: CPUParticles2D = $Confetti
+@onready var burst: CPUParticles2D = $Burst
 
 
 func _ready() -> void:
 	confetti.color_initial_ramp = _confetti_colors()
+	burst.color_initial_ramp = Effects.sparkle_ramp()
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	var result := _pointer.handle(event)
 	if result[0] == Pointer.PRESS and HIT_RECT.has_point(to_local(result[1])):
 		get_viewport().set_input_as_handled()
-		hit()
+		hit(to_local(result[1]))
 
 
 func set_active(on: bool) -> void:
@@ -81,11 +83,12 @@ func reset() -> void:
 	confetti.emitting = false
 
 
-func hit() -> void:
+func hit(at := Vector2(0, -40)) -> void:
 	if busy:
 		return
 	_stop_idle()
 	stage += 1
+	Effects.burst(burst, at, 0.8)
 	_sfx("tok" if stage < STAGES else "crack")
 	_swing_hammer()
 	_do_wobble()

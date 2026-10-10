@@ -1,10 +1,11 @@
 class_name DecorItem
 extends Node2D
-## A clothing piece, sticker or background swatch. Shelf copies sit on the shelf,
-## placed items sit on the toy or on the backdrop.
+## A clothing piece, sticker or background thumbnail. Shelf copies sit on the shelf,
+## placed items sit on the toy.
 
 const Content := preload("res://scripts/data.gd")
-const SHELF_SIZE := 140.0
+const SHELF_SIZE := 140.0  # touch target
+const SHELF_ART := 118.0   # drawn size inside its tile
 const STICKER_SCALE := 0.5
 
 var item_name := ""
@@ -21,11 +22,11 @@ func setup(id: String, item_kind: String, shelf: bool, toy_scale: float) -> void
 	on_shelf = shelf
 	slot = Content.CLOTHES.get(id, "")
 	if kind == "background":
-		sprite.texture = gradient_texture(Content.BACKGROUNDS[id], 512, 512)
+		sprite.texture = load("res://assets/art/swatch_%s.png" % id)
 	else:
 		sprite.texture = load("res://assets/art/%s.png" % id)
 	if shelf:
-		sprite.scale = Vector2.ONE * SHELF_SIZE / 512.0
+		sprite.scale = Vector2.ONE * SHELF_ART / 512.0
 	elif kind == "sticker":
 		sprite.scale = Vector2.ONE * STICKER_SCALE
 	else:
@@ -46,15 +47,3 @@ func celebrate() -> void:
 	var tween := create_tween()
 	tween.tween_property(self, "scale", Vector2.ONE * 1.2, 0.1)
 	tween.tween_property(self, "scale", Vector2.ONE, 0.15).set_trans(Tween.TRANS_BACK)
-
-
-static func gradient_texture(colours: Array, w: int, h: int) -> GradientTexture2D:
-	var gradient := Gradient.new()
-	gradient.colors = PackedColorArray(colours)
-	var tex := GradientTexture2D.new()
-	tex.gradient = gradient
-	tex.fill_from = Vector2(0, 0)
-	tex.fill_to = Vector2(0, 1)
-	tex.width = w
-	tex.height = h
-	return tex

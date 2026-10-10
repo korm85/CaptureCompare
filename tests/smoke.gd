@@ -53,7 +53,7 @@ func _test_reveal() -> void:
 	decorate.start_reveal("dog")
 	_check(decorate.toy.texture != null, "toy texture loads for dog")
 	var head: Marker2D = decorate.toy.get_node("Head")
-	_check(head.position == Content.ANCHORS["head"], "toy has head anchor at its data offset")
+	_check(head.position == Content.TOY_ANCHORS["dog"]["head"], "toy has head anchor at its data offset")
 	await create_timer(2.5).timeout
 	_check(revealed[0], "reveal finishes and emits ready_to_decorate")
 	decorate.queue_free()
@@ -62,6 +62,13 @@ func _test_reveal() -> void:
 func _test_art() -> void:
 	var missing := []
 	for name in Content.TOYS + Content.STICKERS + Content.CLOTHES.keys():
+		if not ResourceLoader.exists("res://assets/art/%s.png" % name):
+			missing.append(name)
+	for name in Content.BACKGROUNDS:
+		for prefix in ["bg_", "swatch_"]:
+			if not ResourceLoader.exists("res://assets/art/%s%s.png" % [prefix, name]):
+				missing.append(prefix + name)
+	for name in ["shadow", "spark", "confetti", "hammer", "trash", "egg_0", "crack_1"]:
 		if not ResourceLoader.exists("res://assets/art/%s.png" % name):
 			missing.append(name)
 	_check(missing.is_empty(), "every toy, sticker and clothing item has art (missing: %s)" % str(missing))

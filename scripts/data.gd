@@ -9,17 +9,16 @@ const CLOTHES := {
 	"scarf_red": "neck", "shirt_blue": "body", "crown_gold": "head",
 }
 const STICKERS := ["star", "heart", "flower", "rainbow", "sun", "moon", "butterfly", "ice_cream"]
-## Toy anchor offsets in texture pixels, measured from the toy's centre.
-const ANCHORS := {
-	"head": Vector2(0, -156),
-	"face": Vector2(0, -31),
-	"neck": Vector2(0, 64),
-	"body": Vector2(0, 134),
-}
-## Optional background swatches as [top, bottom] gradient colours.
-const BACKGROUNDS := {
-	"sky": [Color("9fd8ff"), Color("e8f7ff")],
-	"mint": [Color("b8f2d8"), Color("f0fff8")],
-	"peach": [Color("ffd2b0"), Color("fff4ec")],
-	"lilac": [Color("d7c4ff"), Color("f7f0ff")],
+## Backgrounds: assets/art/bg_<name>.png is the full scene, swatch_<name>.png the shelf thumbnail.
+const BACKGROUNDS := ["sky", "mint", "peach", "lilac"]
+## Where each toy's head, face, neck and body sit, as offsets in texture pixels from the toy's
+## centre. Each toy is drawn differently, so each needs its own set.
+const TOY_ANCHORS := {
+	"cat": {"head": Vector2(0, -158), "face": Vector2(0, -44), "neck": Vector2(0, 60), "body": Vector2(0, 116)},
+	"dog": {"head": Vector2(0, -156), "face": Vector2(0, -42), "neck": Vector2(0, 62), "body": Vector2(0, 116)},
+	"bunny": {"head": Vector2(0, -128), "face": Vector2(0, -20), "neck": Vector2(0, 58), "body": Vector2(0, 118)},
+	"dino": {"head": Vector2(106, -136), "face": Vector2(132, -48), "neck": Vector2(74, 64), "body": Vector2(-20, 110)},
+	"unicorn": {"head": Vector2(28, -136), "face": Vector2(25, -26), "neck": Vector2(28, 64), "body": Vector2(0, 120)},
+	"bear": {"head": Vector2(0, -152), "face": Vector2(0, -46), "neck": Vector2(0, 68), "body": Vector2(0, 116)},
+	"duck": {"head": Vector2(0, -166), "face": Vector2(2, -80), "neck": Vector2(0, 44), "body": Vector2(0, 110)},
 }
