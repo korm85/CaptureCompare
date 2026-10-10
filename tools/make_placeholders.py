@@ -411,6 +411,17 @@ def hammer():
     return img
 
 
+def trash():
+    img, d = new_canvas()
+    bin_col = (120, 150, 180, 255)
+    d.rounded_rectangle([sc(120), sc(190), sc(392), sc(210)], radius=sc(10), fill=(90, 115, 145, 255), outline=OUT, width=sc(8))
+    polygon(d, [(150, 215), (370, 215), (345, 430), (175, 430)], bin_col)
+    for x in (210, 256, 302):
+        line(d, [(x, 250), (x + (x - 256) // 8, 400)], OUT, 8)
+    line(d, [(200, 165), (312, 165)], OUT, 12)
+    return img
+
+
 # ---------- sounds ----------
 
 def t_of(dur):
@@ -497,6 +508,7 @@ def main():
     for stage in range(1, 5):
         save(crack(stage), "crack_%d" % stage)
     save(hammer(), "hammer")
+    save(trash(), "trash")
     make_sounds()
     print("placeholders written to", ART, "and", SFX)
 

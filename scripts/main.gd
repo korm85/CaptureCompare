@@ -31,8 +31,15 @@ func _on_egg_hatched() -> void:
 	decorate = DECORATE_SCENE.instantiate() as Decorate
 	add_child(decorate)
 	decorate.ready_to_decorate.connect(_on_ready_to_decorate)
+	decorate.new_egg_requested.connect(_on_new_egg_requested)
 	decorate.start_reveal(Content.TOYS.pick_random())
 
 
 func _on_ready_to_decorate() -> void:
 	state = State.DECORATE
+
+
+func _on_new_egg_requested() -> void:
+	decorate.queue_free()
+	decorate = null
+	_start_egg()
