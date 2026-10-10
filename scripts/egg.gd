@@ -17,6 +17,7 @@ var _wobble: Tween
 var _squash: Tween
 var _hammer_tween: Tween
 var _split_tween: Tween
+var _idle_tween: Tween
 
 @onready var body: Sprite2D = $Body
 @onready var crack: Sprite2D = $Crack
@@ -40,6 +41,23 @@ func _unhandled_input(event: InputEvent) -> void:
 func set_active(on: bool) -> void:
 	set_process_unhandled_input(on)
 	visible = on
+	if on:
+		_start_idle()
+	else:
+		_stop_idle()
+
+
+func _start_idle() -> void:
+	_stop_idle()
+	_idle_tween = create_tween().set_loops()
+	_idle_tween.tween_property(body, "scale", Vector2.ONE * BODY_SCALE * 1.04, 0.8).set_trans(Tween.TRANS_SINE)
+	_idle_tween.tween_property(body, "scale", Vector2.ONE * BODY_SCALE, 0.8).set_trans(Tween.TRANS_SINE)
+
+
+func _stop_idle() -> void:
+	if _idle_tween and _idle_tween.is_valid():
+		_idle_tween.kill()
+	body.scale = Vector2.ONE * BODY_SCALE
 
 
 func reset() -> void:
@@ -65,6 +83,7 @@ func reset() -> void:
 func hit() -> void:
 	if busy:
 		return
+	_stop_idle()
 	stage += 1
 	_sfx("tok" if stage < STAGES else "crack")
 	_swing_hammer()
