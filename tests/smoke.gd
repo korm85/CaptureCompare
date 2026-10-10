@@ -22,6 +22,7 @@ func _run() -> void:
 	await _test_egg()
 	await _test_reveal()
 	await _test_decorate()
+	await _test_touch_input()
 	_test_art()
 	_test_no_blocking_controls()
 	print("FAILURES: %d" % _failures)
@@ -126,4 +127,52 @@ func _all_descendants(node: Node) -> Array:
 		out.append(child)
 		out.append_array(_all_descendants(child))
 	return out
+
+
+func _touch(target: Node, kind: int, index: int, pos: Vector2, pressed := true) -> void:
+	# Headless runs do not deliver injected input to the viewport, so call the screen's input
+	# handler directly with the same event a finger would produce.
+	if kind == 0:
+		var down := InputEventScreenTouch.new()
+		down.index = index
+		down.pressed = pressed
+		down.position = pos
+		target._unhandled_input(down)
+	else:
+		var move := InputEventScreenDrag.new()
+		move.index = index
+		move.position = pos
+		target._unhandled_input(move)
+
+
+func _test_touch_input() -> void:
+	var decorate: Decorate = (load("res://scenes/decorate.tscn") as PackedScene).instantiate() as Decorate
+	root.add_child(decorate)
+	decorate.start_reveal("cat")
+	await create_timer(2.5).timeout
+	var head_pos: Vector2 = decorate.toy.get_node("Head").global_position
+
+	# An emulated mouse press from a finger must not start a second drag.
+	var emulated := InputEventMouseButton.new()
+	emulated.button_index = MOUSE_BUTTON_LEFT
+	emulated.pressed = true
+	emulated.position = Vector2(926, 170)
+	emulated.device = InputEvent.DEVICE_ID_EMULATION
+	decorate._unhandled_input(emulated)
+	_check(decorate.dragging == null, "emulated mouse event from touch is ignored")
+
+	_touch(decorate, 0, 0, Vector2(926, 170))
+	_check(decorate.dragging != null, "touch press on a shelf item starts a drag")
+	_touch(decorate, 1, 0, head_pos + Vector2(10, 85))
+	_touch(decorate, 1, 0, head_pos + Vector2(10, 80))
+	_touch(decorate, 0, 0, head_pos + Vector2(10, 80), false)
+	_check(decorate.placed_slots.has("head"), "touch drag and release snaps the hat to the head")
+	decorate.queue_free()
+
+	var egg: Egg = (load("res://scenes/egg.tscn") as PackedScene).instantiate() as Egg
+	root.add_child(egg)
+	egg.reset()
+	_touch(egg, 0, 0, Vector2(640, 340))
+	_check(egg.stage == 1, "touch tap on the egg cracks it")
+	egg.queue_free()
 

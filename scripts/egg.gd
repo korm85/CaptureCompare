@@ -18,6 +18,7 @@ var _squash: Tween
 var _hammer_tween: Tween
 var _split_tween: Tween
 var _idle_tween: Tween
+var _pointer := Pointer.new()
 
 @onready var body: Sprite2D = $Body
 @onready var crack: Sprite2D = $Crack
@@ -32,10 +33,10 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		if HIT_RECT.has_point(to_local(event.position)):
-			get_viewport().set_input_as_handled()
-			hit()
+	var result := _pointer.handle(event)
+	if result[0] == Pointer.PRESS and HIT_RECT.has_point(to_local(result[1])):
+		get_viewport().set_input_as_handled()
+		hit()
 
 
 func set_active(on: bool) -> void:

@@ -17,6 +17,7 @@ const SHELF_COLUMNS := [926.0, 1066.0, 1206.0]
 const SHELF_ROWS := [170.0, 318.0, 466.0]
 const TAB_Y := 60.0
 const TABS := ["clothes", "sticker", "background"]
+const LIFT := Vector2(0, -80)  # dragged copies sit above the fingertip so the kid can see them
 const NEW_EGG_CENTER := Vector2(1190, 620)
 const NEW_EGG_SIZE := 160.0
 const TRASH_CENTER := Vector2(120, 620)
@@ -28,6 +29,7 @@ var shelf_items: Array[DecorItem] = []
 var dragging: DecorItem = null
 var drag_offset := Vector2.ZERO
 var placed_slots := {}  # anchor name -> DecorItem wearing it
+var _pointer := Pointer.new()
 
 @onready var toy: Sprite2D = $Toy
 @onready var backdrop: Sprite2D = $Backdrop
@@ -57,6 +59,17 @@ func start_reveal(id: String) -> void:
 	toy.scale = Vector2.ONE * 0.2
 	toy.visible = true
 	_bounce_in()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	var result := _pointer.handle(event)
+	match result[0]:
+		Pointer.PRESS:
+			press(result[1])
+		Pointer.DRAG:
+			drag(result[1])
+		Pointer.RELEASE:
+			release(result[1])
 
 
 func press(pos: Vector2) -> void:
@@ -127,9 +140,9 @@ func _pick_from_shelf(item: DecorItem, pos: Vector2) -> void:
 		_sfx("boop")
 		return
 	var copy := _spawn(item.item_name, item.kind, false)
-	copy.global_position = pos
+	copy.global_position = pos + LIFT
 	dragging = copy
-	drag_offset = Vector2.ZERO
+	drag_offset = -LIFT
 
 
 func _drop_clothes(item: DecorItem) -> void:
