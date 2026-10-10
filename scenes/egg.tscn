@@ -1,0 +1,42 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/egg.gd" id="1_egg"]
+[ext_resource type="Texture2D" path="res://assets/art/hammer.png" id="2_hammer"]
+
+[node name="Egg" type="Node2D"]
+position = Vector2(640, 340)
+script = ExtResource("1_egg")
+
+[node name="Body" type="Sprite2D" parent="."]
+scale = Vector2(0.9, 0.9)
+
+[node name="Crack" type="Sprite2D" parent="."]
+visible = false
+scale = Vector2(0.9, 0.9)
+
+[node name="HalfLeft" type="Sprite2D" parent="."]
+visible = false
+scale = Vector2(0.9, 0.9)
+
+[node name="HalfRight" type="Sprite2D" parent="."]
+visible = false
+scale = Vector2(0.9, 0.9)
+
+[node name="Hammer" type="Sprite2D" parent="."]
+visible = false
+texture = ExtResource("2_hammer")
+scale = Vector2(0.4, 0.4)
+
+[node name="Confetti" type="CPUParticles2D" parent="."]
+emitting = false
+amount = 60
+lifetime = 1.4
+one_shot = true
+explosiveness = 0.9
+direction = Vector2(0, -1)
+spread = 180.0
+gravity = Vector2(0, 700)
+initial_velocity_min = 250.0
+initial_velocity_max = 600.0
+scale_amount_min = 6.0
+scale_amount_max = 12.0
