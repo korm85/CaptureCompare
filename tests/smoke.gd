@@ -2,6 +2,8 @@ extends SceneTree
 ## Headless smoke test. Run: godot --headless --path . --script res://tests/smoke.gd
 ## Exits 0 when all checks pass, 1 otherwise.
 
+const Content := preload("res://scripts/data.gd")
+
 var _failures := 0
 
 
@@ -18,6 +20,8 @@ func _check(ok: bool, label: String) -> void:
 func _run() -> void:
 	await process_frame
 	await _test_egg()
+	await _test_reveal()
+	_test_art()
 	print("FAILURES: %d" % _failures)
 	quit(1 if _failures > 0 else 0)
 
@@ -36,3 +40,25 @@ func _test_egg() -> void:
 	await create_timer(1.3).timeout
 	_check(hatched[0], "egg emits hatched after the split")
 	egg.queue_free()
+
+
+func _test_reveal() -> void:
+	var decorate: Decorate = (load("res://scenes/decorate.tscn") as PackedScene).instantiate() as Decorate
+	root.add_child(decorate)
+	var revealed := [false]
+	decorate.ready_to_decorate.connect(func(): revealed[0] = true)
+	decorate.start_reveal("dog")
+	_check(decorate.toy.texture != null, "toy texture loads for dog")
+	var head: Marker2D = decorate.toy.get_node("Head")
+	_check(head.position == Content.ANCHORS["head"], "toy has head anchor at its data offset")
+	await create_timer(2.5).timeout
+	_check(revealed[0], "reveal finishes and emits ready_to_decorate")
+	decorate.queue_free()
+
+
+func _test_art() -> void:
+	var missing := []
+	for name in Content.TOYS + Content.STICKERS + Content.CLOTHES.keys():
+		if not ResourceLoader.exists("res://assets/art/%s.png" % name):
+			missing.append(name)
+	_check(missing.is_empty(), "every toy, sticker and clothing item has art (missing: %s)" % str(missing))

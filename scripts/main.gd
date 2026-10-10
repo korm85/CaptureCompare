@@ -4,9 +4,12 @@ extends Node2D
 enum State { EGG, REVEAL, DECORATE }
 
 const EGG_SCENE := preload("res://scenes/egg.tscn")
+const DECORATE_SCENE := preload("res://scenes/decorate.tscn")
+const Content := preload("res://scripts/data.gd")
 
 var state := State.EGG
 var egg: Egg
+var decorate: Decorate
 
 
 func _ready() -> void:
@@ -23,8 +26,13 @@ func _start_egg() -> void:
 
 
 func _on_egg_hatched() -> void:
-	# Reveal and decorate come in later milestones; for now, start a new egg.
 	state = State.REVEAL
 	egg.set_active(false)
-	await get_tree().create_timer(1.5).timeout
-	_start_egg()
+	decorate = DECORATE_SCENE.instantiate() as Decorate
+	add_child(decorate)
+	decorate.ready_to_decorate.connect(_on_ready_to_decorate)
+	decorate.start_reveal(Content.TOYS.pick_random())
+
+
+func _on_ready_to_decorate() -> void:
+	state = State.DECORATE
