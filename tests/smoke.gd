@@ -23,6 +23,7 @@ func _run() -> void:
 	await _test_reveal()
 	await _test_decorate()
 	_test_art()
+	_test_no_blocking_controls()
 	print("FAILURES: %d" % _failures)
 	quit(1 if _failures > 0 else 0)
 
@@ -105,4 +106,24 @@ func _test_decorate() -> void:
 	decorate.press(Decorate.NEW_EGG_CENTER)
 	_check(asked[0], "new egg button emits new_egg_requested")
 	decorate.queue_free()
+
+
+func _test_no_blocking_controls() -> void:
+	# A Control that stops mouse events would swallow taps before _unhandled_input sees them.
+	var blockers := []
+	for path in ["res://scenes/main.tscn", "res://scenes/decorate.tscn", "res://scenes/egg.tscn"]:
+		var scene: Node = (load(path) as PackedScene).instantiate()
+		for node in _all_descendants(scene):
+			if node is Control and node.mouse_filter != Control.MOUSE_FILTER_IGNORE:
+				blockers.append("%s:%s" % [path.get_file(), node.name])
+		scene.free()
+	_check(blockers.is_empty(), "no Control blocks mouse input (blockers: %s)" % str(blockers))
+
+
+func _all_descendants(node: Node) -> Array:
+	var out := []
+	for child in node.get_children():
+		out.append(child)
+		out.append_array(_all_descendants(child))
+	return out
 
