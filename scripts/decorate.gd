@@ -117,6 +117,7 @@ func _bounce_in() -> void:
 	var voice_length := _voice("wow")
 	await get_tree().create_timer(maxf(voice_length, 0.6)).timeout
 	ready_to_play = true
+	_voice("dress_me")
 	ready_to_decorate.emit()
 
 
@@ -141,12 +142,14 @@ func _drop_clothes(item: DecorItem) -> void:
 	if previous and previous != item and is_instance_valid(previous):
 		_remove(previous)
 	placed_slots[item.slot] = item
-	_celebrate(item)
+	_sfx("cheer")
+	item.celebrate()
 
 
 func _remove(item: DecorItem) -> void:
 	if placed_slots.get(item.slot) == item:
 		placed_slots.erase(item.slot)
+	_sfx("whoosh")
 	var tween := create_tween()
 	tween.tween_property(item, "scale", Vector2.ZERO, 0.15)
 	tween.tween_callback(item.queue_free)

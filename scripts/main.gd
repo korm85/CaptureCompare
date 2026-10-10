@@ -23,6 +23,9 @@ func _start_egg() -> void:
 	state = State.EGG
 	egg.reset()
 	egg.set_active(true)
+	var audio := get_node_or_null("/root/Audio")
+	if audio:
+		audio.play_voice("crack_it")
 
 
 func _on_egg_hatched() -> void:

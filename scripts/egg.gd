@@ -66,7 +66,7 @@ func hit() -> void:
 	if busy:
 		return
 	stage += 1
-	_sfx("tok")
+	_sfx("tok" if stage < STAGES else "crack")
 	_swing_hammer()
 	_do_wobble()
 	if stage < STAGES:
