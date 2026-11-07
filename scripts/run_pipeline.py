@@ -111,6 +111,7 @@ def main():
         print(json.dumps(save_masks(res, args.out, names), indent=1))
         return
     report = save_outputs(res, args.out, names)
+    report["masks"] = save_masks(res, args.out, names)
     print(json.dumps(report, indent=1))
 
 
