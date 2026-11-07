@@ -99,12 +99,16 @@ Injected-glint test (`eval_injected.py --multi`, each photo in turn as the refer
 
 | Restore using | PSNR on glare (before 11.2 dB) | surrounding enamel | filled from other photos |
 |---|---|---|---|
-| that photo alone | 21.5 dB | 34.0 dB | 0 % |
-| **all 5 light-moved photos** | **23.2 dB** | 33.1 dB | 52 % |
+| that photo alone | 22.5 dB | 35.2 dB | 0 % |
+| **all 5 light-moved photos** | **23.7 dB** | 34.7 dB | 50 % |
 
-On the first set (camera moved, fixed window light), only ~12 % of real glare could be filled from other photos. With the light moved it's ~40–60 %, and the result is about 1.7 dB better than one photo alone. The gain is limited by alignment accuracy: a hand-held burst with slight zoom and pose changes, plus one photo with the jaw open. The borrowed values themselves are about 24.5–27 dB accurate.
+On the first set (camera moved, fixed window light), only ~12 % of real glare could be filled from other photos. With the light moved it's ~40–60 %, and the result is about 1.2 dB better than one photo alone. The gain is limited by alignment accuracy: a hand-held burst with slight zoom and pose changes, plus one photo with the jaw open. The borrowed values themselves are about 24.5–27 dB accurate.
 
-Visual: `results/set2_before_after.jpg`. With light_4 or light_5 as the reference the result is clean and matte. light_2 (the glariest shot) improves but keeps some greyish incisal edges. That may be the real translucent edge that was under the glare, or residual misalignment.
+Visual: `results/set2_before_after.jpg`. With light_4 or light_5 as the reference the result is clean and matte. light_2 (the glariest shot) improves. Dark marks it used to introduce at the lateral incisors' edges are fixed by an enamel brightness floor: removing glare can never leave a spot darker than the clean enamel around it.
+
+PSNR (dB) measures how close an image is to the correct one: 10·log10(1/mean squared error), with pixels on a 0–1 scale. Higher is better; +6 dB means half the typical pixel error.
+
+To see only what is classified as reflection, without editing anything, run `python scripts/run_pipeline.py <photos> --reference N --masks-only`.
 
 ### 5c. Synthetic scene (`scripts/eval_synthetic.py`, 3 scenes)
 
