@@ -1,0 +1,11 @@
+# Reflection-removal pipeline (DepthCapture POC). CPU is enough; a GPU speeds up matching.
+numpy>=1.26
+opencv-contrib-python-headless>=4.9   # DIS optical flow, MAGSAC, inpainting, SIFT baseline
+scipy>=1.11                           # scattered interpolation of the match field, KD-tree
+torch>=2.2                            # EfficientLoFTR inference
+transformers>=4.56                    # zju-community/efficientloftr (Apache-2.0)
+pillow>=10
+mediapipe>=0.10.14                    # optional: mouth ROI when the full face is visible (Apache-2.0)
+# optional, better hole filling (Apache-2.0 LaMa weights, downloaded on first use):
+# simple-lama-inpainting
+pytest>=8
