@@ -59,11 +59,45 @@ Outputs: `output.png`, `compare.jpg` (input | result | where pixels came from), 
 
 `scripts/eval_synthetic.py` renders a glossy curved dental arch from 5 angles (±14° yaw, random pitch/roll/shift, lip motion, exposure/white-balance drift, sensor noise). It has a co-located "phone flash" and a second light. The ground truth is the diffuse-only render.
 
-RESULTS_TABLE
+Mean of 3 scenes (seeds 0–2), metrics inside the mouth:
+
+| Method | PSNR on glare px (↑) | PSNR whole mouth (↑) | PSNR clean px (↑, damage check) | residual glare % (↓) |
+|---|---|---|---|---|
+| reference, untouched | 19.4 | 28.4 | 38.4 | 84.4 |
+| single-image inpaint | 17.9 | 23.7 | 25.8 | 4.5 |
+| aligned **min-fusion** (earlier suggestion) | 17.3 | 21.1 | 21.9 | 6.2 |
+| aligned median-fusion | 19.9 | 26.8 | 29.9 | 47.2 |
+| pipeline, EfficientLoFTR, homography only | **24.1** | **29.6** | **31.5** | 20.2 |
+| pipeline, SIFT + dense | 20.4 | 26.5 | 28.9 | 15.6 |
+| pipeline, EfficientLoFTR + dense (default) | 21.2 | 28.0 | 31.1 | 29.0 |
+
+Glare-mask detection: precision 0.58, recall 0.59. 15.5 % of glare pixels had no clean view and were inpainted.
+
+How to read it:
+* Inpainting and min-fusion "remove" glare (low residual %), but they repaint clean enamel. Their PSNR is far below simply leaving the photo alone.
+* The fusion pipeline is the only method that beats the untouched input where the glare is (+2 to +5 dB) and on the mouth as a whole.
+* On this rendered scene (rigid, near-planar motion) homography-only is best. On the **real** photos the dense stage is clearly needed: hold-out 30.5 dB vs 26.0 dB, and 2 usable views vs 1. So dense stays the default.
+* The synthetic set is a stand-in, not proof. Its textures are procedural, and early on it hid a matcher bug that real photos then exposed.
 
 ## 5. Real photos (`data/smile_set1`, 6 phone photos)
 
-REAL_RESULTS
+There is no ground truth here, so the pipeline reports three things:
+* which views it could align;
+* glare pixels before/after, measured with the detector itself, so this flatters the result;
+* a **hold-out check**: on reference enamel that is *not* glare, how well the fused other views reproduce it. That is the expected accuracy of a replaced pixel.
+
+| Reference | Views usable (of 5) | Hold-out PSNR / MAE | Glare px filled from real views | Glare px inpainted |
+|---|---|---|---|---|
+| frame_4 (frontal) | 2: frame_3, frame_5 | 30.5 dB / 0.022 | 4.5 k | 8.8 k |
+| frame_3 (frontal) | 2: frame_1, frame_4 | 31.6 dB / 0.019 | 6.6 k | 7.5 k |
+| frame_5 | 2: frame_4, frame_6 | 29.3 dB / 0.029 | 9.3 k | 14.5 k |
+
+Honest verdict on this set:
+* **Small, sharp glints are removed well** from real pixels, and alignment of near-frontal views is accurate (about 2 % error).
+* **Broad wet sheen mostly remains.** The light is a large window, so the sheen sits on nearly the same part of each tooth in every frontal shot. There's no clean observation to borrow.
+* **Profile shots can't be used** to clean a frontal reference. They see different tooth surfaces, and the pipeline rejects them automatically.
+* **Over half the replaced area falls back to inpainting.** That's guessed texture, and it shows up as a few soft or dark smudges. The report and `compare.jpg` mark these regions in magenta.
+* MediaPipe found no face in these close-ups (it needs eyes and nose), so the enamel-colour ROI fallback was used.
 
 ## 6. What to change to get a good result
 1. **Capture.** Cross-polarised flash (a polariser on the light, a crossed one on the lens) removes wet-surface reflections optically. That's what dental photographers use. Software can't recover enamel that is glare in every shot.
