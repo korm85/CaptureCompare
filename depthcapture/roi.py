@@ -40,7 +40,7 @@ def _get_landmarker(model_path: str = DEFAULT_MODEL):
     return _landmarker
 
 
-def teeth_roi_color(img_u8: np.ndarray, grow: float = 0.06) -> np.ndarray | None:
+def teeth_roi_color(img_u8: np.ndarray, grow: float = 0.025) -> np.ndarray | None:
     """Fallback for close-ups where no full face is visible (MediaPipe needs
     eyes/nose): enamel-coloured pixels (yellowish hue, moderate saturation,
     bright; excludes grey beard hairs and pink lips/skin), keep the main
@@ -48,8 +48,12 @@ def teeth_roi_color(img_u8: np.ndarray, grow: float = 0.06) -> np.ndarray | None
     h, w = img_u8.shape[:2]
     hsv = cv2.cvtColor(img_u8, cv2.COLOR_RGB2HSV).astype(np.float32)
     hh, s, v = hsv[..., 0], hsv[..., 1] / 255, hsv[..., 2] / 255
-    seed = ((hh > 12) & (hh < 35) & (s > 0.12) & (s < 0.6) & (v > 0.45)).astype(np.uint8)
-    seed = cv2.morphologyEx(seed, cv2.MORPH_OPEN, np.ones((7, 7), np.uint8))
+    # Yellowish enamel, plus pale near-white enamel (bright, slightly warm).
+    seed = (((hh > 12) & (hh < 35) & (s > 0.12) & (s < 0.6) & (v > 0.45))
+            | ((hh > 8) & (hh < 40) & (s > 0.04) & (v > 0.6))).astype(np.uint8)
+    # Opening removes thin structures such as grey/white beard hairs.
+    k = max(7, int(0.012 * max(h, w)) | 1)
+    seed = cv2.morphologyEx(seed, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k)))
     n, lab, st, cen = cv2.connectedComponentsWithStats(seed)
     if n <= 1:
         return None

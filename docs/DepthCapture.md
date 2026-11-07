@@ -85,6 +85,27 @@ Visual before/after: `results/before_after_all.jpg`. In every frontal reference,
 
 The "before → after" column uses the same detector, so it flatters the result; 5a is the trustworthy number. frame_5 keeps much of its broad shine on purpose: its large overexposed areas are treated as lit enamel, not glints.
 
+### 5b-2. Frontal photos with the light moved (`data/smile_set2`, 5 photos)
+This was captured as recommended: roughly frontal, light source moved between shots. Two changes were needed for this kind of set:
+* **Shading match.** Each aligned photo gets a smooth, spatially varying per-channel gain (normalised convolution over clean pixels) so that its shading matches the reference. Fine detail is kept. Without it, the different lighting looked like misalignment and every photo was rejected.
+* **Low flow-confidence floor.** Optical flow assumes constant brightness, which a moving light breaks. Its confidence drops to 0.3–0.6, so the coverage threshold was lowered (0.15 → 0.05).
+
+Other changes:
+* Strength comes from the added brightness: full replacement once a pixel is 0.05 brighter than its glare-free estimate.
+* No borrowing from other photos right at strong edges, where a 1–2 px misalignment pulls in dark mouth background.
+* The teeth mask hugs the teeth, so it no longer reaches the beard.
+
+Injected-glint test (`eval_injected.py --multi`, each photo in turn as the reference, 2 layouts):
+
+| Restore using | PSNR on glare (before 11.2 dB) | surrounding enamel | filled from other photos |
+|---|---|---|---|
+| that photo alone | 21.5 dB | 34.0 dB | 0 % |
+| **all 5 light-moved photos** | **23.2 dB** | 33.1 dB | 52 % |
+
+On the first set (camera moved, fixed window light), only ~12 % of real glare could be filled from other photos. With the light moved it's ~40–60 %, and the result is about 1.7 dB better than one photo alone. The gain is limited by alignment accuracy: a hand-held burst with slight zoom and pose changes, plus one photo with the jaw open. The borrowed values themselves are about 24.5–27 dB accurate.
+
+Visual: `results/set2_before_after.jpg`. With light_4 or light_5 as the reference the result is clean and matte. light_2 (the glariest shot) improves but keeps some greyish incisal edges. That may be the real translucent edge that was under the glare, or residual misalignment.
+
 ### 5c. Synthetic scene (`scripts/eval_synthetic.py`, 3 scenes)
 
 | Method | PSNR glare px | PSNR mouth | PSNR clean px | residual glare % |
@@ -106,6 +127,6 @@ v2 removes far more synthetic glare than v1 (residual 3.7 % vs 29 %), but scores
 
 ## 6. What to change to get a better result
 1. **Capture.** Cross-polarised flash (a polariser on the light, a crossed one on the lens) removes wet-surface reflections optically. That's what dental photographers use. Software can't recover enamel that is glare in every shot.
-2. **Shoot a burst around one pose.** Keep views within about ±15° of each other, and move the **light** (or the phone a little side-to-side) rather than switching between frontal and profile. Profile views are useful for 3D but can't be warped onto a frontal view.
+2. **Keep the camera fixed and move the light** (verified in 5b-2). Use a phone on a stand, the same zoom, and the jaw in the same position in every shot. Alignment error is now the main limit, so a tripod or stand should give the biggest further gain.
 3. **More views of the same pose** raise the share of glare filled from real pixels instead of estimated.
 4. Next engineering steps: a learned single-image specular-removal network for the leftovers, a teeth segmentation model for the ROI, and RAFT/SEA-RAFT flow instead of DIS.

@@ -36,9 +36,11 @@ class Config:
     feather: float = 2.5
     detect_thresh: float = 0.5
     dilate: int = 2                   # px grown around detected glare
-    min_coverage: float = 0.15        # sum of weights below this -> single-image fill
+    min_coverage: float = 0.05        # sum of weights below this -> single-image fill (flow confidence is low under light changes)
     min_valid_frac: float = 0.35      # reject a view if less of the ROI aligns
     max_align_err: float = 0.06       # reject a view if clean pixels still differ this much
+    shading_sigma: float = 2.0        # shading-match smoothness, in detector windows
+    full_strength_excess: float = 0.05  # added brightness at which glare is fully replaced
     max_blob: float = 3.0             # glare blobs larger than max_blob * window^2 px are ignored
     # Fill for glare no other view can supply: "suppress" (enamel-aware, keeps
     # texture; default) | "telea" | "ns" | "lama" (needs simple-lama-inpainting)
@@ -102,6 +104,21 @@ def _gain_match(src, ref, mask):
     return np.clip(src * np.clip(g, 0.5, 2.0)[None, None], 0, 1)
 
 
+def _shading_match(src, ref, mask, sigma):
+    """Spatially varying per-channel gain: makes the smooth shading of `src`
+    (e.g. lit from another side) match `ref`, keeping src's fine detail.
+    Gains come from normalised convolution over `mask` (clean, aligned pixels),
+    so glare in either image does not bias them."""
+    src = _gain_match(src, ref, mask)
+    m = mask.astype(np.float32)
+    den_m = cv2.GaussianBlur(m, (0, 0), sigma)
+    num = cv2.GaussianBlur(ref * m[..., None], (0, 0), sigma)
+    den = cv2.GaussianBlur(src * m[..., None], (0, 0), sigma)
+    gain = num / np.maximum(den, 1e-4)
+    gain = np.where(den_m[..., None] > 0.05, np.clip(gain, 0.6, 1.6), 1.0)
+    return np.clip(src * gain, 0, 1)
+
+
 def _lum(img):
     return img @ np.float32([0.299, 0.587, 0.114])
 
@@ -156,7 +173,9 @@ def remove_reflections(imgs, cfg: Config | None = None, matcher=None) -> Result:
             aligned.append({"index": i, "ok": False})
             continue
         clean = a.valid & roi_b & (intra_frame_mask(a.warped, roi=roi) < 0.2) & (specs[ri] < 0.2)
-        g = _gain_match(a.warped, ref, clean)
+        # Local (shading) match, not just global exposure: with a moved light
+        # the shading differs even where alignment is perfect.
+        g = _shading_match(a.warped, ref, clean, sigma=cfg.shading_sigma * max(9, (min(h, w) // 32) | 1))
         valid_frac = float(a.valid[roi_b].mean())
         err = float(np.median(np.abs(g - ref).mean(-1)[clean])) if clean.sum() > 50 else 1.0
         info = {"index": i, "matches": a.n_matches, "inliers": a.n_inliers,
@@ -221,12 +240,9 @@ def remove_reflections(imgs, cfg: Config | None = None, matcher=None) -> Result:
         strict = intra_frame_mask(ref, roi=roi, tophat_thresh=0.08, above_enamel=0.12)
         ref_spec = np.where(too_big, np.minimum(ref_spec, strict), ref_spec)
     hard = harden(ref_spec, cfg.detect_thresh, dilate=cfg.dilate)
-    # Soft strength: pixels only slightly above the glare criteria get a partial
-    # correction, strong glints a full one (avoids flat, painted-looking teeth).
-    alpha = cv2.GaussianBlur(hard.astype(np.float32), (0, 0), cfg.feather)
-    alpha = np.minimum(alpha, np.clip(ref_spec * 1.5, 0, 1) + cv2.GaussianBlur(
-        hard.astype(np.float32), (0, 0), 1.0) * 0.5)
-    alpha = np.clip(alpha, 0, 1) * roi
+    # Where to edit: the glare mask, feathered. How strongly is decided below
+    # from the amount of added light.
+    alpha = np.clip(cv2.GaussianBlur(hard.astype(np.float32), (0, 0), cfg.feather), 0, 1) * roi
     has_view = cover > cfg.min_coverage
     # A reflection only ever adds light: a view's value is used only where it is
     # clearly darker than the reference's glare (that view saw the surface clean).
@@ -245,14 +261,30 @@ def remove_reflections(imgs, cfg: Config | None = None, matcher=None) -> Result:
 
     too_dark = np.maximum(0.0, _lum(single) - _lum(fused) - 0.04)
     plaus = (np.exp(-(too_dark / 0.05) ** 2)
-             * np.exp(-(np.abs(chroma(fused) - chroma(single)).sum(-1) / 0.04) ** 2))
-    g = has_view * darker * plaus             # 1 = fill from real pixels of other views
+             * np.exp(-(np.abs(chroma(fused) - chroma(single)).sum(-1) / 0.08) ** 2))
+    # Near strong edges (tooth outline, incisal edge against the dark mouth) a
+    # 1-2 px misalignment pulls in dark background: don't borrow there.
+    ls = cv2.GaussianBlur(_lum(single), (0, 0), 1.5)
+    grad = np.hypot(cv2.Sobel(ls, cv2.CV_32F, 1, 0, ksize=3), cv2.Sobel(ls, cv2.CV_32F, 0, 1, ksize=3)) / 4
+    near_edge = cv2.dilate(np.clip((grad - 0.02) / 0.02, 0, 1), np.ones((5, 5), np.uint8))
+    g = has_view * darker * plaus * (1 - near_edge)  # 1 = fill from real pixels of other views
     fill = g[..., None] * fused + (1 - g[..., None]) * single
+    # Strength from physics: a reflection is light ADDED on top of the enamel.
+    # If the pixel is much brighter than its glare-free estimate, replace it
+    # fully; if it is about as bright, there is little glare and little change.
+    excess = _lum(ref) - _lum(fill)
+    alpha = alpha * np.clip(excess / cfg.full_strength_excess, 0, 1)
     out = ref * (1 - alpha[..., None]) + fill * alpha[..., None]
     a_use = alpha * g
     holes = hard & (g <= 0.5)
 
+    hm = hard & (roi_b)
     stats = {
+        "gate_pass_frac": {  # why glare pixels did / didn't get real pixels from other views
+            "has_clean_view": round(float(has_view[hm].mean()), 3) if hm.any() else None,
+            "view_darker": round(float((darker[hm] > 0.5).mean()), 3) if hm.any() else None,
+            "plausible_enamel": round(float((plaus[hm] > 0.5).mean()), 3) if hm.any() else None,
+        },
         "n_frames": n, "n_aligned": len(stack) - 1, "reference": ri,
         "glare_mask_px": int(hard.sum()),
         "filled_from_other_views_px": int((hard & (g > 0.5)).sum()),
