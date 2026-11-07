@@ -3,8 +3,8 @@
 Teeth are bright and unsaturated everywhere, so a plain "bright + white"
 threshold flags clean enamel as reflection. Two cues are used instead:
 
-* intra-frame: a highlight is much brighter than its *local* neighbourhood
-  (white top-hat on the value channel) and close to neutral in colour.
+* intra-frame: a highlight is brighter than its local neighbourhood at two
+  scales, brighter than typical enamel, and near-neutral (``intra_frame_mask``).
 * cross-frame: once frames are aligned, a highlight is view dependent, so a
   pixel that is much brighter than the per-pixel median of the stack is a
   highlight in that frame (``cross_view_mask``).
@@ -33,44 +33,84 @@ def intra_frame_mask(
     img: np.ndarray,
     roi: np.ndarray | None = None,
     scale: int | None = None,
-    tophat_thresh: float = 0.10,
-    sat_thresh: float = 0.30,
-    min_value: float = 0.62,
-    sat_drop_thresh: float = 0.02,
+    tophat_thresh: float = 0.05,
+    above_enamel: float = 0.05,
+    max_sat: float = 0.15,
 ) -> np.ndarray:
-    """Soft specular probability in [0,1] from a single frame.
+    """Soft glare probability in [0,1] from a single frame.
 
-    ``scale`` is the background window (px); default ~1/32 of the short side,
-    i.e. wider than a highlight streak but narrower than a tooth.
+    Tuned on real phone photos, where enamel is itself almost neutral white
+    (saturation ~0.02-0.10), so colour alone cannot separate glare from teeth.
+    A pixel is glare when it is
+      * brighter than its neighbourhood at two scales (white top-hat with a
+        window of ``scale`` and ``2*scale+1`` px; glints are 5-60 px wide), and
+      * brighter than the *local* typical enamel (normalised convolution over
+        bright, low-saturation pixels) by ``above_enamel``, and
+      * near-neutral (rejects wet pink gums/lips edges and stains).
     """
     h, w = img.shape[:2]
     if scale is None:
         scale = max(9, (min(h, w) // 32) | 1)
     v, s = value_saturation(img)
-    # Local background: morphological opening removes small bright blobs.
-    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (scale, scale))
-    background = cv2.morphologyEx(v, cv2.MORPH_OPEN, k)
-    background = cv2.GaussianBlur(background, (0, 0), scale / 4)
-    tophat = v - background
-    # Dichromatic cue: a reflection carries the light's (white) colour, so it
-    # *desaturates* the yellowish enamel underneath. Local enamel saturation is
-    # estimated by a median filter (ignores thin streaks and small stains). Tooth edges
-    # and the bright rim around stains are brighter than their surroundings
-    # but keep the enamel's colour, so this cue rejects them.
-    s_bg = cv2.medianBlur((s * 255).astype(np.uint8), min(scale, 255)).astype(np.float32) / 255
-    s_bg = cv2.GaussianBlur(s_bg, (0, 0), scale / 4)
-    sat_drop = s_bg - s
+    tophat = np.zeros_like(v)
+    for sc in (scale, 2 * scale + 1):
+        k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (sc, sc))
+        bg = cv2.GaussianBlur(cv2.morphologyEx(v, cv2.MORPH_OPEN, k), (0, 0), sc / 4)
+        tophat = np.maximum(tophat, v - bg)
+    region = (roi > 0.5) if roi is not None else np.ones((h, w), bool)
+    cand = (region & (s < 0.25) & (v > 0.4)).astype(np.float32)
+    # *Local* typical enamel brightness (teeth in shadow have dimmer enamel but
+    # their glare is still glare): normalised convolution over enamel pixels.
+    sig = 3 * scale
+    local = cv2.GaussianBlur(v * cand, (0, 0), sig) / np.maximum(cv2.GaussianBlur(cand, (0, 0), sig), 1e-4)
+    glob_v = float(np.percentile(v[cand > 0], 60)) if cand.sum() > 100 else 0.8
+    enamel_v = np.where(cv2.GaussianBlur(cand, (0, 0), sig) > 0.05, local, glob_v)
     p = (
-        _sigmoid((tophat - tophat_thresh) / 0.025)
-        * _sigmoid((sat_thresh - s) / 0.05)
-        * _sigmoid((v - min_value) / 0.03)
-        * _sigmoid((sat_drop - sat_drop_thresh) / 0.015)
+        _sigmoid((tophat - tophat_thresh) / 0.02)
+        * _sigmoid((v - (enamel_v + above_enamel)) / 0.02)
+        * _sigmoid((max_sat - s) / 0.03)
     )
-    # Clipped pixels are always highlights.
+    # Clipped pixels are always glare.
     p = np.maximum(p, (img.min(axis=2) > 0.985).astype(np.float32))
     if roi is not None:
         p *= roi
     return p.astype(np.float32)
+
+
+def suppress_glare(img: np.ndarray, prob: np.ndarray, scale: int | None = None,
+                   detail: float = 0.35) -> np.ndarray:
+    """Single-image fallback for glare no other view can fill.
+
+    The diffuse colour under the glare is estimated by normalised convolution
+    over *clean enamel only* (bright, low-saturation, non-glare pixels), so dark
+    inter-dental gaps and pink gums don't bleed in (plain inpainting does).
+    A damped copy of the original fine detail is added back so the surface
+    texture survives, and the result is never brighter than the input.
+    Returns the corrected image; blend it with a soft mask.
+    """
+    h, w = img.shape[:2]
+    if scale is None:
+        scale = max(9, (min(h, w) // 32) | 1)
+    v, s = value_saturation(img)
+    support = ((prob < 0.2) & (v > 0.35) & (s < 0.35)).astype(np.float32)
+    out = img.copy()
+    num = np.zeros_like(img)
+    den = np.zeros((h, w), np.float32)
+    done = np.zeros((h, w), bool)
+    # Smallest neighbourhood with enough clean support wins (keeps local colour);
+    # grow it for large glare patches.
+    for sig in (scale / 2, scale, 2 * scale, 4 * scale):
+        n = cv2.GaussianBlur(img * support[..., None], (0, 0), sig)
+        d = cv2.GaussianBlur(support, (0, 0), sig)
+        take = ~done & (d > (0.25 if sig < 4 * scale else 1e-4))
+        num[take], den[take] = n[take], d[take]
+        done |= take
+    base = num / np.maximum(den, 1e-6)[..., None]
+    hi = img - cv2.GaussianBlur(img, (0, 0), 1.5)
+    diffuse = np.minimum(img, base + detail * hi)
+    has = done
+    out[has] = diffuse[has]
+    return np.clip(out, 0, 1).astype(np.float32)
 
 
 def cross_view_mask(

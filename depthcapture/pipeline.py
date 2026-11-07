@@ -22,7 +22,7 @@ import cv2
 import numpy as np
 
 from .align import EfficientLoFTRMatcher, SIFTMatcher, align_to_reference
-from .specular import cross_view_mask, harden, intra_frame_mask
+from .specular import cross_view_mask, harden, intra_frame_mask, suppress_glare
 
 
 @dataclass
@@ -36,10 +36,13 @@ class Config:
     feather: float = 2.5
     detect_thresh: float = 0.5
     dilate: int = 2                   # px grown around detected glare
-    min_coverage: float = 0.15        # sum of weights below this -> inpaint
+    min_coverage: float = 0.15        # sum of weights below this -> single-image fill
     min_valid_frac: float = 0.35      # reject a view if less of the ROI aligns
     max_align_err: float = 0.06       # reject a view if clean pixels still differ this much
-    inpaint: str = "telea"            # "telea" | "ns" | "lama" (needs simple-lama-inpainting)
+    max_blob: float = 3.0             # glare blobs larger than max_blob * window^2 px are ignored
+    # Fill for glare no other view can supply: "suppress" (enamel-aware, keeps
+    # texture; default) | "telea" | "ns" | "lama" (needs simple-lama-inpainting)
+    inpaint: str = "suppress"
 
 
 @dataclass
@@ -125,17 +128,20 @@ def remove_reflections(imgs, cfg: Config | None = None, matcher=None) -> Result:
     n = len(imgs)
     h, w = imgs[0].shape[:2]
 
-    # ROI on each frame isn't needed; computed on the reference only.
-    specs = [intra_frame_mask(im) for im in imgs]
+    # Teeth ROI per frame: glare detection is calibrated against the enamel in it.
+    rois, srcs = [], []
+    for im in imgs:
+        r, src = (None, "full-frame")
+        if cfg.use_roi:
+            from .roi import find_roi
+
+            r, src = find_roi((im * 255).astype(np.uint8))
+        rois.append(np.ones((h, w), np.float32) if r is None else r)
+        srcs.append(src)
+    specs = [intra_frame_mask(im, roi=r) for im, r in zip(imgs, rois)]
     ri = _pick_reference(imgs, specs) if cfg.reference == "auto" else int(cfg.reference)
     ref = imgs[ri]
-
-    roi, roi_src = None, "full-frame"
-    if cfg.use_roi:
-        from .roi import find_roi
-
-        roi, roi_src = find_roi((ref * 255).astype(np.uint8))
-    roi = np.ones((h, w), np.float32) if roi is None else roi
+    roi, roi_src = rois[ri], srcs[ri]
     roi_b = roi > 0.5
 
     if matcher is None:
@@ -149,7 +155,7 @@ def remove_reflections(imgs, cfg: Config | None = None, matcher=None) -> Result:
         if a is None:
             aligned.append({"index": i, "ok": False})
             continue
-        clean = a.valid & roi_b & (intra_frame_mask(a.warped) < 0.2) & (specs[ri] < 0.2)
+        clean = a.valid & roi_b & (intra_frame_mask(a.warped, roi=roi) < 0.2) & (specs[ri] < 0.2)
         g = _gain_match(a.warped, ref, clean)
         valid_frac = float(a.valid[roi_b].mean())
         err = float(np.median(np.abs(g - ref).mean(-1)[clean])) if clean.sum() > 50 else 1.0
@@ -170,7 +176,7 @@ def remove_reflections(imgs, cfg: Config | None = None, matcher=None) -> Result:
     C = np.stack(conf)
     L = _lum(S)
 
-    intra = np.stack([intra_frame_mask(s) for s in S])
+    intra = np.stack([specs[ri]] + [intra_frame_mask(x, roi=roi) for x in S[1:]])
     cross = cross_view_mask(L, V, cfg.cross_margin)
     # For the reference, only trust the cross-view cue where the *other* views
     # agree with each other; at occlusion edges misaligned views scatter and
@@ -201,24 +207,58 @@ def remove_reflections(imgs, cfg: Config | None = None, matcher=None) -> Result:
     fused = (W[..., None] * S).sum(0) / np.maximum(cover, 1e-6)[..., None]
 
     ref_spec = spec[0] * roi
+    # Glints on wet enamel are small relative to a tooth. A "glare" blob bigger
+    # than ~3 window^2 is mostly a brightly lit / overexposed / whiter tooth
+    # surface, not a reflection, and flattening it destroys the tooth.
+    scale = max(9, (min(h, w) // 32) | 1)
+    core = (ref_spec > cfg.detect_thresh).astype(np.uint8)
+    ncomp, lab, st, _ = cv2.connectedComponentsWithStats(core)
+    too_big = np.isin(lab, [i for i in range(1, ncomp) if st[i, cv2.CC_STAT_AREA] > cfg.max_blob * scale ** 2])
+    too_big = cv2.dilate(too_big.astype(np.uint8), np.ones((5, 5), np.uint8)).astype(bool)
+    # Inside such a region keep only strong, sharp glints (much brighter than
+    # the local enamel), which are still reflections on a bright tooth.
+    if too_big.any():
+        strict = intra_frame_mask(ref, roi=roi, tophat_thresh=0.08, above_enamel=0.12)
+        ref_spec = np.where(too_big, np.minimum(ref_spec, strict), ref_spec)
     hard = harden(ref_spec, cfg.detect_thresh, dilate=cfg.dilate)
+    # Soft strength: pixels only slightly above the glare criteria get a partial
+    # correction, strong glints a full one (avoids flat, painted-looking teeth).
     alpha = cv2.GaussianBlur(hard.astype(np.float32), (0, 0), cfg.feather)
-    alpha = np.maximum(alpha, ref_spec) * roi
+    alpha = np.minimum(alpha, np.clip(ref_spec * 1.5, 0, 1) + cv2.GaussianBlur(
+        hard.astype(np.float32), (0, 0), 1.0) * 0.5)
+    alpha = np.clip(alpha, 0, 1) * roi
     has_view = cover > cfg.min_coverage
-    holes = hard & ~has_view
-    # A reflection only ever adds light: never replace a pixel with something
-    # brighter, and fade out where the replacement is not clearly darker.
-    darker = 1 / (1 + np.exp(-((_lum(ref) - _lum(fused)) - 0.02) / 0.015))
-    a_use = alpha * has_view * darker
-    out = ref * (1 - a_use[..., None]) + fused * a_use[..., None]
-    out = _inpaint(out, holes, cfg.inpaint)
+    # A reflection only ever adds light: a view's value is used only where it is
+    # clearly darker than the reference's glare (that view saw the surface clean).
+    darker = 1 / (1 + np.exp(-np.clip(((_lum(ref) - _lum(fused)) - 0.02) / 0.015, -50, 50)))
+    # Everything else under the glare mask gets the single-image fill.
+    glare_prob = np.maximum(ref_spec, hard.astype(np.float32))
+    if cfg.inpaint == "suppress":
+        single = suppress_glare(ref, glare_prob)
+    else:
+        single = _inpaint(ref, hard, cfg.inpaint)
+    # Plausibility: a value from another view must look like enamel at this spot
+    # (same colour as the local diffuse estimate and not much darker), otherwise
+    # it is a misregistered gap, gum or stain and would leave a grey/dark blotch.
+    def chroma(x):
+        return x / np.maximum(x.sum(-1, keepdims=True), 1e-4)
+
+    too_dark = np.maximum(0.0, _lum(single) - _lum(fused) - 0.04)
+    plaus = (np.exp(-(too_dark / 0.05) ** 2)
+             * np.exp(-(np.abs(chroma(fused) - chroma(single)).sum(-1) / 0.04) ** 2))
+    g = has_view * darker * plaus             # 1 = fill from real pixels of other views
+    fill = g[..., None] * fused + (1 - g[..., None]) * single
+    out = ref * (1 - alpha[..., None]) + fill * alpha[..., None]
+    a_use = alpha * g
+    holes = hard & (g <= 0.5)
 
     stats = {
         "n_frames": n, "n_aligned": len(stack) - 1, "reference": ri,
-        "ref_spec_px": int(hard.sum()),
-        "replaced_from_views_px": int((hard & has_view).sum()),
-        "inpainted_px": int(holes.sum()),
+        "glare_mask_px": int(hard.sum()),
+        "filled_from_other_views_px": int((hard & (g > 0.5)).sum()),
+        "filled_single_image_px": int(holes.sum()),
         "roi": roi_src,
+        "ignored_large_blobs_px": int(too_big.sum()),
     }
     # Hold-out check on real data (no ground truth needed): on reference pixels
     # that are NOT glare, the fusion of the other views should reproduce the
@@ -229,7 +269,7 @@ def remove_reflections(imgs, cfg: Config | None = None, matcher=None) -> Result:
         stats["holdout_psnr_db"] = round(10 * np.log10(1 / max(mse, 1e-10)), 2)
         stats["holdout_mae"] = round(float(np.abs(fused - ref)[hold].mean()), 4)
         stats["holdout_px"] = int(hold.sum())
-    stats["glare_px_before"] = int((intra_frame_mask(ref) * roi > 0.5).sum())
-    stats["glare_px_after"] = int((intra_frame_mask(out) * roi > 0.5).sum())
+    stats["glare_px_before"] = int((intra_frame_mask(ref, roi=roi) > 0.5).sum())
+    stats["glare_px_after"] = int((intra_frame_mask(out, roi=roi) > 0.5).sum())
     return Result(out.astype(np.float32), ref, ri, ref_spec, a_use, holes, cover, roi,
                   fused=fused, aligned=aligned, stats=stats)

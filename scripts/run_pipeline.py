@@ -32,12 +32,12 @@ def save_outputs(res, out_dir, names):
 
     overlay = res.reference.copy()
     overlay[res.replaced > 0.3] = overlay[res.replaced > 0.3] * 0.3 + np.float32([0, 0.7, 0])  # green: from other views
-    overlay[res.holes] = overlay[res.holes] * 0.3 + np.float32([0.7, 0, 0.7])                  # magenta: inpainted
+    overlay[res.holes] = overlay[res.holes] * 0.3 + np.float32([0.7, 0, 0.7])                  # magenta: single-image fill
     ys, xs = np.nonzero(res.roi > 0.5)
     y0, y1, x0, x1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
     crop = lambda a: _u8(a[y0:y1, x0:x1])  # noqa: E731
     tiles = [crop(res.reference), crop(res.output), crop(overlay)]
-    for t, lab in zip(tiles, ["input (reference view)", "reflections removed", "green=from views, magenta=inpainted"]):
+    for t, lab in zip(tiles, ["input (reference view)", "reflections removed", "green=from other photos, magenta=single-image fill"]):
         cv2.putText(t, lab, (10, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 0), 2)
     cv2.imwrite(f"{out_dir}/compare.jpg", cv2.cvtColor(np.hstack(tiles), cv2.COLOR_RGB2BGR))
 
