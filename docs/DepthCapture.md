@@ -117,11 +117,11 @@ To see only what is classified as reflection, without editing anything, run `pyt
 | reference, untouched | 19.4 | 28.4 | 38.4 | 84.4 |
 | aligned min-fusion (my original idea) | 15.7 | 21.2 | 22.9 | 10.9 |
 | aligned median-fusion | 18.5 | 25.9 | 29.8 | 50.9 |
-| pipeline v2, homography only | 21.4 | 27.6 | 29.9 | 4.2 |
-| pipeline v2, default | 18.8 | 25.8 | 29.1 | 3.7 |
+| pipeline (current), homography only | 21.8 | 28.2 | 30.9 | 6.1 |
+| pipeline (current), default | 20.6 | 27.4 | 30.5 | 4.5 |
 | (pipeline v1, default) | 21.2 | 28.0 | 31.1 | 29.0 |
 
-v2 removes far more synthetic glare than v1 (residual 3.7 % vs 29 %), but scores lower in PSNR. The synthetic highlights are long, full-height streaks over strongly shaded fake teeth, so a flat enamel fill loses the shading. That scene doesn't resemble real wet-teeth glare, so v2 was tuned on the real photos (5a, 5b). Treat 5c as a sanity check only.
+The current version removes far more synthetic glare than v1 (residual 4.5 % vs 29 %) at a slightly lower PSNR. The synthetic highlights are long, full-height streaks over strongly shaded fake teeth, so a flat enamel fill loses the shading. That scene doesn't resemble real wet-teeth glare, so v2 was tuned on the real photos (5a, 5b). Treat 5c as a sanity check only.
 
 ### Limits
 * **Only near-frontal views help.** Profile shots see different tooth surfaces and are rejected automatically (2 of 5 views usable per reference here).
