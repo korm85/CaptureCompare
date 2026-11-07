@@ -59,6 +59,10 @@ class Result:
     coverage: np.ndarray
     roi: np.ndarray
     fused: np.ndarray | None = None   # glare-free estimate from the other views
+    glare_mask: np.ndarray | None = None      # final reflection mask (bool) that gets edited
+    mask_single: np.ndarray | None = None     # found in the reference photo alone (bool)
+    mask_cross: np.ndarray | None = None      # added because other photos are darker there (bool)
+    ignored_bright: np.ndarray | None = None  # large bright areas treated as lit enamel (bool)
     aligned: list = field(default_factory=list)
     stats: dict = field(default_factory=dict)
 
@@ -318,5 +322,8 @@ def remove_reflections(imgs, cfg: Config | None = None, matcher=None) -> Result:
         stats["holdout_px"] = int(hold.sum())
     stats["glare_px_before"] = int((intra_frame_mask(ref, roi=roi) > 0.5).sum())
     stats["glare_px_after"] = int((intra_frame_mask(out, roi=roi) > 0.5).sum())
+    m_single = (specs[ri] * roi > cfg.detect_thresh) & ~too_big
+    m_cross = (cross[0] * roi > cfg.detect_thresh) & ~m_single & ~too_big
     return Result(out.astype(np.float32), ref, ri, ref_spec, a_use, holes, cover, roi,
-                  fused=fused, aligned=aligned, stats=stats)
+                  fused=fused, aligned=aligned, stats=stats, glare_mask=hard,
+                  mask_single=m_single, mask_cross=m_cross, ignored_bright=too_big & roi_b)
