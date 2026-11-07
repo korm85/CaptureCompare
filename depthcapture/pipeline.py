@@ -40,6 +40,7 @@ class Config:
     min_valid_frac: float = 0.35      # reject a view if less of the ROI aligns
     max_align_err: float = 0.06       # reject a view if clean pixels still differ this much
     shading_sigma: float = 2.0        # shading-match smoothness, in detector windows
+    floor_margin: float = 0.04        # fill may be at most this much darker than local clean enamel
     full_strength_excess: float = 0.05  # added brightness at which glare is fully replaced
     max_blob: float = 3.0             # glare blobs larger than max_blob * window^2 px are ignored
     # Fill for glare no other view can supply: "suppress" (enamel-aware, keeps
@@ -269,6 +270,20 @@ def remove_reflections(imgs, cfg: Config | None = None, matcher=None) -> Result:
     near_edge = cv2.dilate(np.clip((grad - 0.02) / 0.02, 0, 1), np.ones((5, 5), np.uint8))
     g = has_view * darker * plaus * (1 - near_edge)  # 1 = fill from real pixels of other views
     fill = g[..., None] * fused + (1 - g[..., None]) * single
+    # Floor: a reflection only ADDS light, so removing it can never leave the
+    # surface darker than the clean enamel around it. Without this, misaligned
+    # edges or translucent/gap pixels in the fill showed up as dark "stains"
+    # that do not exist on the tooth.
+    from .specular import value_saturation
+
+    v_r, s_r = value_saturation(ref)
+    clean_en = ((ref_spec < 0.2) & (v_r > 0.45) & (s_r < 0.35) & roi_b).astype(np.float32)
+    d_en = cv2.GaussianBlur(clean_en, (0, 0), scale)
+    loc_en = cv2.GaussianBlur(_lum(ref) * clean_en, (0, 0), scale) / np.maximum(d_en, 1e-4)
+    floor = np.where(d_en > 0.05, loc_en - cfg.floor_margin, 0.0)
+    fl = _lum(fill)
+    lift = np.where(fl < floor, floor / np.maximum(fl, 1e-3), 1.0)
+    fill = np.minimum(fill * lift[..., None], ref)        # never brighter than the input
     # Strength from physics: a reflection is light ADDED on top of the enamel.
     # If the pixel is much brighter than its glare-free estimate, replace it
     # fully; if it is about as bright, there is little glare and little change.

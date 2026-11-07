@@ -92,7 +92,9 @@ def suppress_glare(img: np.ndarray, prob: np.ndarray, scale: int | None = None,
     if scale is None:
         scale = max(9, (min(h, w) // 32) | 1)
     v, s = value_saturation(img)
-    support = ((prob < 0.2) & (v > 0.35) & (s < 0.35)).astype(np.float32)
+    # Bright enamel only: excludes dark gaps and translucent incisal edges, which
+    # would otherwise tint the estimate grey.
+    support = ((prob < 0.2) & (v > 0.45) & (s < 0.35)).astype(np.float32)
     out = img.copy()
     num = np.zeros_like(img)
     den = np.zeros((h, w), np.float32)
