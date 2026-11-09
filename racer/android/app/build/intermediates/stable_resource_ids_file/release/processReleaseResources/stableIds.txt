@@ -1,2 +1,0 @@
-com.rainbowracers.game:string/app_name = 0x7f020000
-com.rainbowracers.game:mipmap/ic_launcher = 0x7f010000

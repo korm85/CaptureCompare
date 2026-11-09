@@ -1,7 +1,0 @@
-com.rainbowracers.game.app-pngs-0 /home/user/CaptureCompare/racer/android/app/build/generated/res/pngs/release
-com.rainbowracers.game.app-resValues-1 /home/user/CaptureCompare/racer/android/app/build/generated/res/resValues/release
-com.rainbowracers.game.app-packageReleaseResources-2 /home/user/CaptureCompare/racer/android/app/build/intermediates/incremental/release/packageReleaseResources/merged.dir
-com.rainbowracers.game.app-packageReleaseResources-3 /home/user/CaptureCompare/racer/android/app/build/intermediates/incremental/release/packageReleaseResources/stripped.dir
-com.rainbowracers.game.app-release-4 /home/user/CaptureCompare/racer/android/app/build/intermediates/merged_res/release/mergeReleaseResources
-com.rainbowracers.game.app-main-5 /home/user/CaptureCompare/racer/android/app/src/main/res
-com.rainbowracers.game.app-release-6 /home/user/CaptureCompare/racer/android/app/src/release/res
