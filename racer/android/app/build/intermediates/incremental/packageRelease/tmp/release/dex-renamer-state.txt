@@ -1,0 +1,4 @@
+#Mon Nov 09 07:42:22 UTC 2026
+base.0=/home/user/CaptureCompare/racer/android/app/build/intermediates/dex/release/mergeDexRelease/classes.dex
+path.0=classes.dex
+renamed.0=classes.dex

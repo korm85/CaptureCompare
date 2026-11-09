@@ -1,0 +1,26 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.rainbowracers.game.app-mergeReleaseResources-2:/values/values.xml",
+            "map": [
+                {
+                    "source": "/home/user/CaptureCompare/racer/android/app/src/main/res/values/strings.xml",
+                    "from": {
+                        "startLines": "0",
+                        "startColumns": "11",
+                        "startOffsets": "11",
+                        "endColumns": "58",
+                        "endOffsets": "58"
+                    },
+                    "to": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "51",
+                        "endOffsets": "102"
+                    }
+                }
+            ]
+        }
+    ]
+}

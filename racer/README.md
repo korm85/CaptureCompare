@@ -1,29 +1,19 @@
 # Rainbow Racers
 
-A never-ending, one-finger racing game for little kids.
+A tiny kids arcade in one file (`game.html`), made for touch screens. Nothing to install.
 
+## Race
 - Slide a finger to steer. Tap your own car to honk.
 - Collect stars, hit rainbow pads for a speed boost, grab surprise gifts.
-- Race four animal cars. Bumping them is silly, never a crash. No game over.
-- The road travels through six lands that change about every minute:
-  Flower Meadow, Sunny Beach, Under the Sea, Snowy Land, Candy Town, Starry Space.
+- Race four animal cars. Bumps are silly, never a crash. No game over.
+- Six lands that change about every minute: Flower Meadow, Sunny Beach,
+  Under the Sea, Snowy Land, Candy Town, Starry Space.
+- Car button (bottom left): swap to any of 12 animal cars at any time.
+- View button (bottom right): Top view (2D), Behind the car (3D), or
+  Steering wheel (turn the wheel from the driver's seat; tap its star to honk).
 
-## Files
-
-- `game.html` – the whole game (one file, no dependencies).
-- `RainbowRacers.apk` – ready-to-install Android app (works offline).
-- `android/` – the small WebView app that wraps `game.html`.
-
-## Install on Android
-
-Download `RainbowRacers.apk` on the tablet/phone, open it, and allow
-"Install unknown apps" when asked.
-
-## Rebuild the APK
-
-```
-cd android
-echo "sdk.dir=/path/to/android-sdk" > local.properties
-gradle assembleRelease
-```
-The APK is at `android/app/build/outputs/apk/release/app-release.apk`.
+## Blocks
+- Gentle falling blocks with happy faces, mostly small shapes.
+- Tap a block to turn it, tap beside it to move it, slide to drag it, swipe down to drop.
+  Big buttons do the same.
+- Full rows sparkle away. If the board fills up, it clears itself and play goes on.
